@@ -1,0 +1,9 @@
+node_modules/
+dist/
+playwright-report/
+test-results/
+.DS_Store
+
+# Fleet-wide build spec and the demo brief — local working docs, not part of the demo
+CRYPTO-LAB-TEMPLATE*.md
+brief.txt
