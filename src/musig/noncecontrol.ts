@@ -43,7 +43,7 @@ import {
   taggedHash,
   xbytes,
 } from './field.js';
-import { sumPoints } from './naive.js';
+import { naiveNonceAgg } from './naive.js';
 
 export interface GrindResult {
   /** Which scheme was attacked. */
@@ -85,7 +85,7 @@ export function grindSingleNonce(honestNonceSecrets: bigint[], targetR: Pt): Gri
   const attackerNonce = add(targetR, negate(sumHonest));
   if (attackerNonce.is0()) throw new Error('degenerate target (pick a different target nonce)');
 
-  const achieved = sumPoints([...honestPoints, attackerNonce], 'aggregate nonce');
+  const achieved = naiveNonceAgg([...honestPoints, attackerNonce]);
   const hitTarget = achieved.equals(targetR);
 
   return {

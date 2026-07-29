@@ -13,11 +13,13 @@ import {
   code,
   disclosure,
   field,
+  glossary,
   h,
   labLink,
   learnerCheck,
   note,
   panelIntro,
+  scrollRegion,
   short,
   textControl,
   verdict,
@@ -27,6 +29,7 @@ import {
   type Signer,
   dropOneSigner,
   indistinguishability,
+  loneSignerComparison,
   makeSigners,
   runSession,
 } from '../musig/session.js';
@@ -163,6 +166,48 @@ export function renderSessionPanel(root: HTMLElement): void {
       'MuSig2 does something better. The three of you combine your public keys into a single public key, combine fresh random values into a single random value, and each contribute one number toward a single signature. What comes out is one signature under one key — the same size and shape as a signature from one person, and accepted by software that has never heard of multisig.',
       'This panel runs that protocol for real and steps through it. Nothing below is precomputed or illustrative: every number is produced by the code in this page.',
     ),
+    glossary([
+      {
+        term: 'Signer',
+        plain: 'One person or device holding one secret key. This lab writes u for how many there are.',
+      },
+      {
+        term: 'Secret key / public key',
+        plain: 'A secret number d, and the curve point P = d·G you can safely publish. Deriving d back from P is the problem nobody knows how to solve.',
+        formal: 'Written d_i and P_i below.',
+      },
+      {
+        term: 'Nonce',
+        plain: 'A fresh random number used for exactly one signature. Not a password, not reusable — reusing one across two messages leaks the secret key outright.',
+        formal: 'Written k for the secret and R = k·G for the public commitment.',
+      },
+      {
+        term: 'Challenge',
+        plain: 'A number derived by hashing the nonce, the key, and the message together. It is what ties a signature to one specific message.',
+        formal: 'Written e.',
+      },
+      {
+        term: 'Aggregate',
+        plain: 'Combine several things into one of the same kind. Here: many public keys into one public key, many nonces into one nonce, many partial signatures into one signature.',
+      },
+      {
+        term: 'Coefficient',
+        plain: 'A multiplier applied to someone’s key before adding it in, so that no one can steer the total by choosing their key last.',
+        formal: 'Written a_i for keys and b for nonces.',
+      },
+      {
+        term: 'x-only',
+        plain: 'A curve point has an x and a y. BIP-340 stores only x (32 bytes) and rebuilds y by convention, which is why the code keeps flipping signs to agree on which y was meant.',
+      },
+      {
+        term: 'n-of-n',
+        plain: 'Every listed signer must take part. Not a quorum: with three signers, three must sign, and losing one key loses the funds.',
+      },
+      {
+        term: 'mod n',
+        plain: 'Scalars wrap around at a fixed huge number n (the group order), the way clock arithmetic wraps at 12. Every "+" and "·" on secrets below is really "+ then wrap".',
+      },
+    ]),
     h(
       'div',
       { class: 'controls' },
@@ -244,6 +289,7 @@ export function renderSessionPanel(root: HTMLElement): void {
 
     if (step >= STEPS.length) {
       output.append(verifySection(r));
+      output.append(loneSignerSection(r));
       output.append(breakItSection(r));
       output.append(
         learnerCheck(
@@ -347,6 +393,21 @@ export function renderSessionPanel(root: HTMLElement): void {
             field(`${s.label} public key`, s.pubkey, { sub: `P_${idx + 1}, compressed` }),
           ),
           field('Message digest actually signed', r.messageDigest, { sub: 'SHA-256 of the text above' }),
+          disclosure(
+            'Show the secret keys (so you can check the arithmetic yourself)',
+            h(
+              'p',
+              {},
+              'Normally these never leave a signer. They are shown here because step 5’s equation s_i = k_i1 + b·k_i2 + e·a_i·d_i cannot be checked by hand without d_i — and being able to check it is the point of the exhibit.',
+            ),
+            ...r.signers.map((s, idx) => field(`${s.label} secret scalar d_${idx + 1}`, s.secretKey)),
+            note(
+              'caveat',
+              'These are throwaway keys generated in this tab by WebCrypto. They are never persisted, never transmitted, and are replaced whenever you press ',
+              code('New keys'),
+              '. Never paste a real secret key into a web page — including this one.',
+            ),
+          ),
         );
         break;
       case 1: {
@@ -450,10 +511,16 @@ export function renderSessionPanel(root: HTMLElement): void {
                   p.verified ? 'partial verified' : 'partial REJECTED',
                 ),
               ),
-              field('s_i', p.psigHex, { sub: 'k_i1 + b·k_i2 + e·a_i·d_i mod n' }),
+              field('s_i', p.psigHex, { sub: '= k_i1 + b·k_i2 + e·a_i·d_i mod n' }),
+              bothSides(
+                'The aggregator checks this signer in the group, not in the scalar field — s_i·G against (R_i1 + b·R_i2)^± + e·a_i·g′·P_i:',
+                { label: 's_i·G', value: p.sides.lhs },
+                { label: '(R_i1 + b·R_i2)^± + e·a_i·g′·P_i', value: p.sides.rhs },
+              ),
               disclosure(
                 'The terms behind this signer’s scalar',
                 field('a_i (key coefficient)', hex32(p.trace.a)),
+                field('d_i (secret scalar, after the Q-parity flip)', hex32(p.trace.d)),
                 field('k_i1 (first nonce, after the R-parity flip)', hex32(p.trace.k1Effective)),
                 field('k_i2 (second nonce, after the R-parity flip)', hex32(p.trace.k2Effective)),
                 h(
@@ -546,6 +613,133 @@ export function renderSessionPanel(root: HTMLElement): void {
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  // ------------------------------------------------- the claim, as a challenge
+
+  /**
+   * "Indistinguishable from a lone signer's" is the lab's headline claim, so it is
+   * put to the learner as a question before it is answered. One of the two cards
+   * below was made by this group; the other by @noble/curves' ordinary
+   * single-signer `schnorr.sign`. Which slot is which is a WebCrypto coin flip.
+   */
+  function loneSignerSection(r: SessionResult): HTMLElement {
+    const cmp = loneSignerComparison(r);
+    const reveal = h('div', { class: 'guess-out', role: 'status', 'aria-live': 'polite' });
+
+    const cards = cmp.slots.map((slot, i) =>
+      h(
+        'div',
+        { class: 'sig-card' },
+        h('h4', {}, `Signature ${i === 0 ? 'A' : 'B'}`),
+        field('Public key', slot.keyX, { sub: `${slot.keyBytes} bytes, x-only` }),
+        field('Signature', slot.signatureHex, { sub: `${slot.signatureBytes} bytes` }),
+        verdict(
+          slot.valid ? 'pass' : 'fail',
+          slot.valid
+            ? `accepted by the plain BIP-340 verifier${slot.nobleValid ? ', and by @noble/curves’ own' : ''}`
+            : 'rejected',
+          slot.valid ? 'Valid' : 'Rejected',
+        ),
+      ),
+    );
+
+    const guess = (choice: 0 | 1): void => {
+      const right = choice === cmp.groupSlot;
+      clear(reveal);
+      reveal.append(
+        h(
+          'span',
+          { class: `pill pill-${right ? 'ok' : 'bad'}` },
+          h('span', { 'aria-hidden': 'true' }, right ? '✓ ' : '✕ '),
+          right ? 'Right — but only by luck' : 'Wrong',
+        ),
+        h(
+          'p',
+          { class: 'help' },
+          `Signature ${cmp.groupSlot === 0 ? 'A' : 'B'} is the one ${cmp.signerCount} signers made together; the other came from one keypair and one call to an ordinary Schnorr library. There is nothing in the bytes to go on — a 50/50 guess is the best anyone can do, which is exactly the property MuSig2 is claiming.`,
+        ),
+      );
+    };
+
+    const table = h(
+      'table',
+      { class: 'kat-table' },
+      h(
+        'thead',
+        {},
+        h(
+          'tr',
+          {},
+          h('th', { scope: 'col' }, 'Property'),
+          h('th', { scope: 'col' }, `The ${cmp.signerCount}-signer group`),
+          h('th', { scope: 'col' }, 'One lone signer'),
+          h('th', { scope: 'col' }, 'Same?'),
+        ),
+      ),
+      h(
+        'tbody',
+        {},
+        ...cmp.comparedProperties.map((row) =>
+          h(
+            'tr',
+            {},
+            h('th', { scope: 'row' }, row.property),
+            h('td', {}, row.group),
+            h('td', {}, row.lone),
+            h(
+              'td',
+              {},
+              h(
+                'span',
+                { class: `pill pill-${row.same ? 'ok' : 'bad'}` },
+                h('span', { 'aria-hidden': 'true' }, row.same ? '✓ ' : '✕ '),
+                row.same ? 'identical' : 'differs',
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    return h(
+      'div',
+      { class: 'aha' },
+      h('h3', {}, 'One of these was signed by a group. Which one?'),
+      h(
+        'p',
+        { class: 'help' },
+        `Both signatures below are over the same message. One is this session’s aggregate from ${cmp.signerCount} signers. The other was produced by @noble/curves’ ordinary single-signer Schnorr implementation, which has never heard of MuSig. Look at them, pick one, then reveal.`,
+      ),
+      h('div', { class: 'sig-pair' }, ...cards),
+      h(
+        'div',
+        { class: 'preset-row', role: 'group', 'aria-label': 'Which signature did the group make?' },
+        h(
+          'button',
+          { type: 'button', class: 'btn btn-ghost', onclick: () => guess(0) },
+          'A was the group',
+        ),
+        h(
+          'button',
+          { type: 'button', class: 'btn btn-ghost', onclick: () => guess(1) },
+          'B was the group',
+        ),
+      ),
+      reveal,
+      scrollRegion('Group signature compared with a lone signer’s', table),
+      verdict(
+        cmp.indistinguishable ? 'pass' : 'fail',
+        cmp.indistinguishable
+          ? 'every observable property matches — a verifier, and a blockchain, cannot tell the two apart'
+          : 'some property differs, which would break the indistinguishability claim',
+        cmp.indistinguishable ? 'Indistinguishable' : 'Distinguishable',
+      ),
+      note(
+        'caveat',
+        'This is indistinguishability of the SIGNATURE, not of the signers. Anyone who watched the two rounds of network traffic, or who already knows the group’s key list, learns the signer set immediately. MuSig2 hides the group from whoever reads the finished signature — not from a participant, and not from a network observer.',
       ),
     );
   }

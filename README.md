@@ -23,7 +23,9 @@ Group arithmetic (point add/multiply, field square root, scalar inversion) comes
 
 ## Exhibits
 
-1. **Signing Session** — one real MuSig2 session, stepped through six stages. A collapse diagram shows n public keys becoming 1, n nonce pairs becoming 1 nonce, and n partial signatures becoming 1 signature, with every coefficient, challenge and scalar shown at the stage that computes it. Choose 2–5 signers, type the message, toggle BIP-327 KeySort and watch the aggregate key move. The final stage hands the 64 bytes to a plain BIP-340 verifier — the "aha". Break-it controls corrupt a single bit of one partial signature (the aggregator names the culprit) and attempt to sign with one signer absent (MuSig2 is n-of-n).
+1. **Signing Session** — one real MuSig2 session, stepped through six stages. A collapse diagram shows n public keys becoming 1, n nonce pairs becoming 1 nonce, and n partial signatures becoming 1 signature, with every coefficient, challenge and scalar shown at the stage that computes it. Choose 2–5 signers, type the message, toggle BIP-327 KeySort and watch the aggregate key move. Each signer's partial is checked in the group as well as the scalar field — `s_i·G` against `(R_i1 + b·R_i2)^± + e·a_i·g′·P_i`, compared byte-for-byte — and the secret scalars can be revealed so the equation is checkable by hand. The final stage hands the 64 bytes to a plain BIP-340 verifier. Break-it controls corrupt a single bit of one partial signature (the aggregator names the culprit) and attempt to sign with one signer absent (MuSig2 is n-of-n). A collapsed glossary introduces every term the page uses.
+
+   The tab closes with **"One of these was signed by a group. Which one?"** — the headline claim put as a question rather than a statement. Two signatures over the same message sit side by side: one is this session's aggregate, the other comes from `@noble/curves`' ordinary single-signer `schnorr.sign`, and which slot is which is a WebCrypto coin flip. Guess, then reveal, then compare the two on every observable property — all of which read *identical*. It is equally clear about the limit: this hides the group from whoever reads the finished signature, not from a participant or a network observer.
 2. **Key Aggregation** — the coefficients in the foreground. `L`, the second-key shortcut, every `a_i`, and an independently recomputed `Σ a_i·P_i` compared byte-for-byte against `Q`. Reverse the key order, apply KeySort, or make every key identical to exercise the all-keys-equal sentinel, and see the naive `Σ P_i` aggregate side by side with the BIP-327 one.
 3. **Rogue Key Attack** — the break that killed naive multisig, run for real. Under naive aggregation the attacker publishes `P_rogue = t·G − ΣP_honest`, signs alone, and **the genuine BIP-340 verifier accepts** — shown as an alarm, not a success. The identical attack against BIP-327 runs the attacker's fixed-point search round by round and misses every time. A third control lets you supply your own rogue key and target secret and submit them to either rule.
 4. **Why Two Nonces** — pick a target aggregate nonce. Against one nonce per signer, the attacker hits it *exactly*, first try, with one subtraction — and therefore chooses the challenge. Against BIP-327's two nonces, the same move misses every round, with the real `b` derived from the bytes the attacker just published. The panel states plainly which part of the Wagner/ROS forgery is shown and which is out of scope.
@@ -48,7 +50,7 @@ Do **NOT** use MuSig2 when:
 
 **<https://systemslibrarian.github.io/crypto-lab-musig-gate/>**
 
-In the browser you can: step a real 2-to-5-signer session from fresh keys to one 64-byte signature; watch the key, nonce and signature collapses happen one stage at a time; verify the aggregate signature with a plain BIP-340 verifier and an independent library verifier; corrupt one partial signature and see the culprit named; attempt to sign with a signer missing; mount a rogue-key attack that a real verifier accepts, then watch the same attack fail against BIP-327; steer a single-nonce aggregate onto a chosen target and watch the two-nonce version refuse; and run all 56 BIP-327 vectors live.
+In the browser you can: step a real 2-to-5-signer session from fresh keys to one 64-byte signature; watch the key, nonce and signature collapses happen one stage at a time; verify the aggregate signature with a plain BIP-340 verifier and an independent library verifier; try to pick the group's signature out of a blind pair against a lone signer's and discover you cannot; corrupt one partial signature and see the culprit named; attempt to sign with a signer missing; mount a rogue-key attack that a real verifier accepts, then watch the same attack fail against BIP-327; steer a single-nonce aggregate onto a chosen target and watch the two-nonce version refuse; and run all 56 BIP-327 vectors live.
 
 Deep links: `#session`, `#keyagg`, `#rogue`, `#nonce`, `#vectors`.
 
@@ -76,10 +78,12 @@ BIP-327 supersedes the original MuSig2 paper's parameterisation for Bitcoin use 
 ```bash
 npm ci
 npm run dev        # http://localhost:5173/crypto-lab-musig-gate/
-npm test           # 182 unit tests, including the 56 BIP-327 spec KATs
+npm test           # 204 unit tests, including the 56 BIP-327 spec KATs
 npm run build      # tsc --noEmit && vite build
 npm run preview    # serve the production build (the a11y gate serves it on port 4276)
-npm run test:a11y  # axe-core WCAG 2.1 A/AA gate, both themes, against the build
+npm run test:a11y  # the full Playwright suite: axe gate (both themes) + functional flows
+npm run test:axe   # just the axe accessibility gate
+npm run test:e2e   # just the functional flows, desktop + mobile viewport
 ```
 
 Requires Node 22+. `npm run test:a11y` needs the Playwright Chromium browser once: `npx playwright install chromium`.
@@ -94,7 +98,7 @@ Requires Node 22+. `npm run test:a11y` needs the Playwright Chromium browser onc
 
 ## Build & Verify
 
-**182 unit tests (Vitest), including 56 official BIP-327 known-answer cases** — 30 that must be accepted, 26 that must be rejected. All pass.
+**204 unit tests (Vitest), including 56 official BIP-327 known-answer cases** — 30 that must be accepted, 26 that must be rejected — plus **56 end-to-end tests (Playwright)**. All pass.
 
 Spec vectors, verbatim from [bitcoin/bips · bip-0327/vectors](https://github.com/bitcoin/bips/tree/master/bip-0327/vectors):
 
@@ -110,9 +114,15 @@ Spec vectors, verbatim from [bitcoin/bips · bip-0327/vectors](https://github.co
 
 The same runners (`src/musig/vectors.ts`) drive both the Vitest suite and exhibit 5's live table, so a green table in the browser and a green CI run are the same claim.
 
-Beyond the KATs, the suite covers: full 2-, 3-, 4- and 5-signer round trips verified by two independent verifiers; the algebraic identity `s_i = k_i1 + b·k_i2 + e·a_i·d_i` checked per signer; `Σ s_i` equal to the signature's `s`; secnonce consumption (a second `sign()` throws); refusal to sign with a mismatched key, an out-of-range key, or for a key list the signer is not in; rejection of a negated partial, a wrong-signer partial, and an out-of-range partial; single-bit tamper detection with correct attribution; the n-of-n boundary; the infinity-fallback and empty-message edge cases; the naive rogue-key attack **succeeding**; the BIP-327 rogue-key attack **failing**; single-nonce target-hitting **succeeding**; and two-nonce target-hitting **failing**.
+**End-to-end (Playwright, Chromium on a desktop and a Pixel 5 viewport):** 27 functional flows × 2 viewports assert what the unit suite structurally cannot — that each exhibit renders its result rather than throwing, that alarm-versus-pass semantics actually reach the DOM (a successful forgery must render as `.verdict-alarm`, never `.verdict-pass`), that stepping reveals more of the *same* session rather than resampling it, that the blind pair really is indistinguishable, that a corrupted partial marks exactly one signer, that a malformed rogue key is refused before signing, that the theme toggle persists across a reload, that there is exactly one `<h1>` and one banner landmark, that arrow keys move between tabs, that the scripture line appears verbatim exactly once, and that nothing overflows horizontally at 320px. Every flow also asserts zero uncaught page errors and zero console errors.
 
-**Accessibility gate:** `@axe-core/playwright` scans the production build for WCAG 2.1 A/AA violations in **both** themes, driving all five exhibits into their post-interaction states first — every step revealed, both attacks run in both modes, the malformed-input rejection path, the tamper and missing-signer failures, and every disclosure and learner check opened. Zero violations required. `.github/workflows/deploy.yml` runs unit tests → build (typecheck included) → the a11y gate, and only then deploys, so a broken build or an accessibility regression never ships.
+Beyond the KATs, the unit suite covers: full 2-, 3-, 4- and 5-signer round trips verified by two independent verifiers; the algebraic identity `s_i = k_i1 + b·k_i2 + e·a_i·d_i` checked per signer; `Σ s_i` equal to the signature's `s`; secnonce consumption (a second `sign()` throws); refusal to sign with a mismatched key, an out-of-range key, or for a key list the signer is not in; rejection of a negated partial, a wrong-signer partial, and an out-of-range partial; single-bit tamper detection with correct attribution; the n-of-n boundary; the infinity-fallback and empty-message edge cases; the naive rogue-key attack **succeeding**; the BIP-327 rogue-key attack **failing**; single-nonce target-hitting **succeeding**; and two-nonce target-hitting **failing**. The lone-signer comparison is tested both ways: indistinguishable in shape for 2–5 signers, and *not* interchangeable in substance (neither signature verifies under the other's key), with the coin flip shown to reach both slots.
+
+**Accessibility gate:** `@axe-core/playwright` scans the production build for WCAG 2.1 A/AA violations in **both** themes, driving all five exhibits into their post-interaction states first — every step revealed, both attacks run in both modes, the malformed-input rejection path, the tamper and missing-signer failures, and every disclosure and learner check opened. Zero violations required.
+
+Colour choices are checked rather than eyeballed: every text/background pair in `src/style.css` was contrast-computed against AA, verdict tints are explicit colours rather than `color-mix()` so their ratios are verifiable, muted text lowers lightness instead of using `opacity`, and state is always icon + word + colour so it survives greyscale and deuteranopia.
+
+`.github/workflows/deploy.yml` runs unit tests → build (typecheck included) → the full Playwright suite (axe gate *and* functional flows), and only then deploys, so a broken build, a functional regression, or an accessibility regression never ships.
 
 ## Performance
 

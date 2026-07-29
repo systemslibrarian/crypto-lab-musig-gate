@@ -51,6 +51,17 @@ export function naiveKeyAgg(pubkeys: PlainPk[]): Pt {
   return sumPoints(pubkeys.map(cpoint), 'aggregate key');
 }
 
+/**
+ * BROKEN: R = ΣR_i from ONE nonce per signer, with no b coefficient.
+ *
+ * The named counterpart to BIP-327's `nonceAgg`, and the whole difference between
+ * them: this one is a single reversible sum, so the last signer to publish decides
+ * the result. `noncecontrol.ts` attacks exactly this.
+ */
+export function naiveNonceAgg(pubnonces: Pt[]): Pt {
+  return sumPoints(pubnonces, 'aggregate nonce');
+}
+
 export interface NaiveSigner {
   /** Secret scalar as the signer holds it. */
   d: bigint;

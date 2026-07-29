@@ -13,12 +13,14 @@
  * NOT production crypto — a teaching demo.
  */
 import { sha256 } from '@noble/hashes/sha2.js';
+import { schnorr } from '@noble/curves/secp256k1.js';
 import {
   bigTo32,
   bytesToHex,
   hexToBytes,
   individualPubkey,
   keySort,
+  randomBytes,
   randomScalar,
   utf8,
   xbytes,
@@ -27,10 +29,12 @@ import { type VerifyResult, nobleVerify, verify } from './bip340.js';
 import { type KeyAggTrace, type PlainPk, keyAggWithTrace } from './keyagg.js';
 import { type NonceAggTrace, type PubNonce, nonceAgg, nonceAggWithTrace, nonceGen } from './nonce.js';
 import {
+  type PartialSigSides,
   type PartialSignTrace,
   type SessionContext,
   getSessionValues,
   partialSigAgg,
+  partialSigSides,
   partialSigVerify,
   sign,
 } from './sign.js';
@@ -47,12 +51,20 @@ export interface PartialRecord {
   trace: PartialSignTrace;
   /** Independently verified by the aggregator before aggregation. */
   verified: boolean;
+  /** The two sides of this signer's group equation, so equality can be shown. */
+  sides: PartialSigSides;
 }
 
 export interface SessionResult {
   message: string;
   messageDigest: string; // the 32 bytes actually signed
-  signers: { label: string; pubkey: string }[];
+  /**
+   * Per-signer keys. `secretKey` is exposed deliberately: the whole point of the
+   * round-2 exhibit is that a learner can check s_i = k_i1 + b·k_i2 + e·a_i·d_i by
+   * hand, which is impossible without d_i. These are throwaway per-session keys
+   * generated in the tab, never persisted and never sent anywhere.
+   */
+  signers: { label: string; pubkey: string; secretKey: string }[];
   keyAgg: KeyAggTrace;
   aggregateKeyX: string;
   round1: {
@@ -136,7 +148,13 @@ export function runSession(
   const round2: PartialRecord[] = ordered.map((s, i) => {
     // `sign` consumes the secnonce, so hand it the array it may zero out.
     const { psig, trace } = sign(nonces[i].secnonce, s.secretKey, session);
-    return { label: s.label, psigHex: bytesToHex(psig), trace, verified: false };
+    return {
+      label: s.label,
+      psigHex: bytesToHex(psig),
+      trace,
+      verified: false,
+      sides: partialSigSides(psig, pubnonces[i], pubkeys[i], session),
+    };
   });
 
   let psigs = round2.map((r) => hexToBytes(r.psigHex));
@@ -154,6 +172,9 @@ export function runSession(
   // failure attributable to a signer rather than to "the session".
   for (let i = 0; i < round2.length; i++) {
     round2[i].verified = partialSigVerify(psigs[i], pubnonces, pubkeys, msg, i);
+    // Recomputed against the possibly-tampered scalar, so a corrupted partial
+    // shows its two sides actually differing rather than a bare "false".
+    round2[i].sides = partialSigSides(psigs[i], pubnonces[i], pubkeys[i], session);
   }
 
   // --- Aggregate and verify with a plain BIP-340 verifier ------------------
@@ -163,7 +184,11 @@ export function runSession(
   return {
     message: text,
     messageDigest: bytesToHex(msg),
-    signers: ordered.map((s) => ({ label: s.label, pubkey: bytesToHex(s.pubkey) })),
+    signers: ordered.map((s) => ({
+      label: s.label,
+      pubkey: bytesToHex(s.pubkey),
+      secretKey: bytesToHex(s.secretKey),
+    })),
     keyAgg: keyAggTrace,
     aggregateKeyX: bytesToHex(aggpk),
     round1: {
@@ -215,6 +240,107 @@ export function indistinguishability(result: SessionResult): {
     handRolledValid: result.verdict.valid,
     nobleValid: nobleVerify(sig, msg, pk),
     agree: result.verdict.valid === nobleVerify(sig, msg, pk),
+  };
+}
+
+/**
+ * The lab's headline claim, set up as something a learner can be TESTED on rather
+ * than told.
+ *
+ * We produce a genuine single-signer BIP-340 signature over the same message using
+ * `@noble/curves`' own `schnorr.sign` — a library with no notion of MuSig at all —
+ * and place it beside the group's aggregate signature. Both are 64 bytes, both
+ * verify under a 32-byte x-only key through the same verifier, and which slot holds
+ * which is decided by a WebCrypto coin flip so the panel can ask before it reveals.
+ *
+ * If the two were distinguishable, this function is where it would show up.
+ */
+export interface LoneSignerComparison {
+  /** slot[0] and slot[1]; `groupSlot` says which one the group made. */
+  slots: {
+    keyX: string;
+    signatureHex: string;
+    signatureBytes: number;
+    keyBytes: number;
+    /** Verified through the hand-rolled BIP-340 verifier. */
+    valid: boolean;
+    /** Verified again through @noble/curves' independent verifier. */
+    nobleValid: boolean;
+  }[];
+  groupSlot: 0 | 1;
+  messageDigest: string;
+  signerCount: number;
+  /** True when nothing observable separates the two — the claim being tested. */
+  indistinguishable: boolean;
+  /** The specific properties compared, so "indistinguishable" is not a bare claim. */
+  comparedProperties: { property: string; group: string; lone: string; same: boolean }[];
+}
+
+export function loneSignerComparison(result: SessionResult): LoneSignerComparison {
+  const msg = hexToBytes(result.messageDigest);
+
+  // A real, ordinary, one-person signature — made by the audited library, not by us.
+  const lone = schnorr.keygen();
+  const loneSig = schnorr.sign(msg, lone.secretKey);
+
+  const groupSig = hexToBytes(result.aggregation.signatureHex);
+  const groupKey = hexToBytes(result.aggregateKeyX);
+
+  const describe = (sig: Uint8Array, key: Uint8Array) => ({
+    keyX: bytesToHex(key),
+    signatureHex: bytesToHex(sig),
+    signatureBytes: sig.length,
+    keyBytes: key.length,
+    valid: verify(sig, msg, key).valid,
+    nobleValid: nobleVerify(sig, msg, key),
+  });
+  const group = describe(groupSig, groupKey);
+  const loneSlot = describe(loneSig, lone.publicKey);
+
+  // A fair coin, so the reveal is a genuine question and not a fixed layout.
+  const groupSlot: 0 | 1 = (randomBytes(1)[0] & 1) === 0 ? 0 : 1;
+  const slots = groupSlot === 0 ? [group, loneSlot] : [loneSlot, group];
+
+  const comparedProperties = [
+    {
+      property: 'Signature length',
+      group: `${group.signatureBytes} bytes`,
+      lone: `${loneSlot.signatureBytes} bytes`,
+      same: group.signatureBytes === loneSlot.signatureBytes,
+    },
+    {
+      property: 'Public key length',
+      group: `${group.keyBytes} bytes (x-only)`,
+      lone: `${loneSlot.keyBytes} bytes (x-only)`,
+      same: group.keyBytes === loneSlot.keyBytes,
+    },
+    {
+      property: 'Verifies under a plain BIP-340 verifier',
+      group: group.valid ? 'yes' : 'no',
+      lone: loneSlot.valid ? 'yes' : 'no',
+      same: group.valid === loneSlot.valid,
+    },
+    {
+      property: 'Verifies under @noble/curves’ own verifier',
+      group: group.nobleValid ? 'yes' : 'no',
+      lone: loneSlot.nobleValid ? 'yes' : 'no',
+      same: group.nobleValid === loneSlot.nobleValid,
+    },
+    {
+      property: 'Number of signers recoverable from these bytes',
+      group: 'no',
+      lone: 'no',
+      same: true,
+    },
+  ];
+
+  return {
+    slots,
+    groupSlot,
+    messageDigest: result.messageDigest,
+    signerCount: result.signers.length,
+    indistinguishable: comparedProperties.every((p) => p.same),
+    comparedProperties,
   };
 }
 

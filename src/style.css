@@ -368,7 +368,7 @@ input[type="checkbox"] { accent-color: var(--accent); width: 1.05rem; height: 1.
 .attack-broken { border-left: 3px solid var(--bad); }
 .attack-fixed { border-left: 3px solid var(--ok); }
 .attack-block { margin: 1rem 0; }
-.break-out { display: grid; gap: 0.5rem; }
+.break-out, .guess-out { display: grid; gap: 0.5rem; }
 
 .facts { margin: 0; padding-left: 1.2rem; display: grid; gap: 0.3rem; font-size: 0.9rem; }
 .facts li { color: var(--text); }
@@ -471,6 +471,26 @@ input[type="checkbox"] { accent-color: var(--accent); width: 1.05rem; height: 1.
 .kat-ok { border-left: 3px solid var(--ok); }
 .kat-bad { border-left: 3px solid var(--bad); }
 .kat-body { display: grid; gap: 0.45rem; padding: 0.2rem 0.7rem 0.7rem; }
+
+/* ---------- lone-signer comparison cards ---------- */
+.sig-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 0.8rem; }
+.sig-card {
+  display: grid;
+  gap: 0.5rem;
+  align-content: start;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.8rem;
+}
+.sig-card h4 { margin: 0; font-size: 0.95rem; color: var(--text); }
+@media (max-width: 640px) { .sig-pair { grid-template-columns: 1fr; } }
+
+/* ---------- glossary ---------- */
+.glossary-body { margin: 0.6rem 0 0; display: grid; gap: 0.15rem; }
+.glossary-body dt { font-weight: 700; font-size: 0.88rem; margin-top: 0.5rem; }
+.glossary-body dd { margin: 0; font-size: 0.88rem; color: var(--text-dim); }
+.glossary-formal { color: var(--accent-text); }
 
 /* ---------- footer ---------- */
 .scripture-footer {

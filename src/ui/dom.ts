@@ -196,6 +196,32 @@ export function learnerCheck(
   );
 }
 
+/**
+ * Jargon scaffolding: a collapsed definition list a newcomer can open the moment a
+ * term stops making sense, without the terms being pre-chewed for readers who
+ * already know them.
+ */
+export function glossary(entries: { term: string; plain: string; formal?: string }[]): HTMLElement {
+  return h(
+    'details',
+    { class: 'disclose glossary' },
+    h('summary', {}, 'Glossary — the words this page uses'),
+    h(
+      'dl',
+      { class: 'glossary-body' },
+      ...entries.flatMap((e) => [
+        h('dt', {}, e.term),
+        h(
+          'dd',
+          {},
+          e.plain,
+          e.formal ? h('span', { class: 'glossary-formal' }, ` ${e.formal}`) : null,
+        ),
+      ]),
+    ),
+  );
+}
+
 /** A labelled text input with help text. */
 export function textControl(opts: {
   id: string;

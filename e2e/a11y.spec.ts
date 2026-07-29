@@ -9,10 +9,11 @@ const TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'];
  * Axe only checks what is in the DOM, and this lab renders each tab lazily and
  * fills dynamic result regions on click — so an unscanned state is an ungated
  * state. This driver walks all five exhibits, steps the signing session to its
- * final step, fires both attacks in both their broken and fixed modes, runs the
- * hand-supplied rogue-key path (including its malformed-input rejection), trips
- * the tamper and drop-a-signer failure paths, and opens every disclosure and
- * learner check so the feedback live regions are populated too.
+ * final step, answers the blind lone-signer challenge both ways, fires both attacks
+ * in both their broken and fixed modes, runs the hand-supplied rogue-key path
+ * (including its malformed-input rejection), trips the tamper and drop-a-signer
+ * failure paths, and opens every disclosure, glossary and learner check so the
+ * feedback live regions are populated too.
  */
 async function driveDemos(page: Page): Promise<void> {
   const click = async (selector: string, nth = 0): Promise<void> => {
@@ -35,6 +36,10 @@ async function driveDemos(page: Page): Promise<void> {
   await page.locator('#signer-count').fill('4').catch(() => {});
   await page.locator('#signer-count').press('ArrowLeft').catch(() => {});
   await clickByText(page, '#panel-session', 'Show all steps');
+  // The blind lone-signer pair: populate the reveal live region (both outcomes are
+  // reachable since the correct slot is a coin flip, so click both buttons).
+  await clickByText(page, '#panel-session', 'A was the group');
+  await clickByText(page, '#panel-session', 'B was the group');
   // Break-it paths: attribute a corrupted partial, then the n-of-n boundary.
   await clickByText(page, '#panel-session', 'Corrupt Signer 2');
   await clickByText(page, '#panel-session', 'Try signing with one signer missing');

@@ -45,6 +45,7 @@ import {
   mod,
   mul,
   negate,
+  pointHex,
   taggedHash,
   xbytes,
   xorBytes,
@@ -226,6 +227,40 @@ export function partialSigVerifyInternal(
   const g = hasEvenY(Q) ? 1n : N - 1n;
   const gPrime = mod(g * gacc, N);
   return mul(G, s).equals(add(Rs, mul(Ppt, mod(e * a * gPrime, N))));
+}
+
+/**
+ * The two sides of one signer's group equation, for display.
+ *
+ * `partialSigVerifyInternal` returns a boolean; this returns the actual points it
+ * compared, so a panel can show byte-for-byte equality instead of asserting that a
+ * check passed. Same arithmetic, same order — the boolean and `equal` here always
+ * agree, which `sign.test.ts` pins down.
+ */
+export interface PartialSigSides {
+  lhs: string; // s_i·G, x-only hex (or "∞")
+  rhs: string; // (R_i1 + b·R_i2)^± + e·a_i·g'·P_i
+  equal: boolean;
+}
+
+export function partialSigSides(
+  psig: Uint8Array,
+  pubnonce: PubNonce,
+  pk: PlainPk,
+  session: SessionContext,
+): PartialSigSides {
+  const { Q, gacc, b, R, e } = getSessionValues(session);
+  const s = bytesToBig(psig);
+  const Rs1 = cpoint(pubnonce.subarray(0, 33));
+  const Rs2 = cpoint(pubnonce.subarray(33, 66));
+  const RsRaw = add(Rs1, mul(Rs2, b));
+  const Rs = hasEvenY(R) ? RsRaw : negate(RsRaw);
+  const Ppt = cpoint(pk);
+  const a = sessionKeyAggCoeff(session.pubkeys, Ppt);
+  const g = hasEvenY(Q) ? 1n : N - 1n;
+  const lhsPt = mul(G, s);
+  const rhsPt = add(Rs, mul(Ppt, mod(e * a * mod(g * gacc, N), N)));
+  return { lhs: pointHex(lhsPt), rhs: pointHex(rhsPt), equal: lhsPt.equals(rhsPt) };
 }
 
 /** The public wrapper: aggregate the nonces, then verify signer `i`'s partial. */
