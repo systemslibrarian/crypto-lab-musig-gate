@@ -1,6 +1,6 @@
 import './style.css';
-import { byteModeControl, resetPredictions } from './ui/dom.js';
-import { type PanelKey, mountTour } from './ui/tour.js';
+import { byteModeControl, h, resetPredictions, srOnly } from './ui/dom.js';
+import { type PanelKey, type TourProgress, mountTour } from './ui/tour.js';
 import { renderSessionPanel } from './ui/sessionPanel.js';
 import { renderKeyAggPanel } from './ui/keyaggPanel.js';
 import { renderRoguePanel } from './ui/roguePanel.js';
@@ -70,16 +70,45 @@ if (byteHost) byteHost.append(byteModeControl());
  */
 const tourHost = document.getElementById('tour-host');
 if (tourHost) {
-  mountTour(tourHost, selectTab, () => {
-    // "Start over" means the whole lesson, not one panel: drop recorded predictions
-    // and re-render every exhibit from scratch.
-    resetPredictions();
-    for (const key of rendered) {
-      const el = panelEl(key);
-      el.replaceChildren();
-      renderers[key](el);
+  mountTour(
+    tourHost,
+    selectTab,
+    () => {
+      // "Start over" means the whole lesson, not one panel: drop recorded predictions
+      // and re-render every exhibit from scratch.
+      resetPredictions();
+      for (const key of rendered) {
+        const el = panelEl(key);
+        el.replaceChildren();
+        renderers[key](el);
+      }
+    },
+    markTourProgress,
+  );
+}
+
+/**
+ * While the tour runs, the tab strip becomes the lesson map: exhibits whose stops are
+ * behind you are marked done.
+ *
+ * The mark is a tick AND a word — "done" is appended to each tab's accessible name
+ * rather than being carried by colour and a glyph alone, so the state survives
+ * greyscale and reaches a screen reader. Cleared entirely when the tour is not
+ * running, because outside the lesson there is no order to be ahead or behind of.
+ */
+function markTourProgress(progress: TourProgress): void {
+  for (const tab of document.querySelectorAll<HTMLButtonElement>('.tab-btn')) {
+    const key = tab.dataset.panel as PanelKey;
+    const done = progress.active && progress.done.has(key);
+    tab.classList.toggle('tab-done', done);
+    let tick = tab.querySelector('.tab-tick');
+    if (done && !tick) {
+      tick = h('span', { class: 'tab-tick' }, h('span', { 'aria-hidden': 'true' }, ' ✓'), srOnly(' done'));
+      tab.append(tick);
+    } else if (!done && tick) {
+      tick.remove();
     }
-  });
+  }
 }
 
 /** #keyagg / #rogue / #nonce / #vectors deep-link straight to an exhibit. */

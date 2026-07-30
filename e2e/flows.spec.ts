@@ -681,6 +681,73 @@ test.describe('the advanced material is optional', () => {
   });
 });
 
+test.describe('jargon scaffolding', () => {
+  test('each step shows the one term it needs, and it matches the glossary', async ({ page }) => {
+    await page.goto('.');
+    await btn(page, '#panel-session', 'Show all steps').click();
+
+    const asides = page.locator('#panel-session .step-card .term-aside');
+    await expect(asides).toHaveCount(6);
+    const terms = await asides.locator('dt').allTextContents();
+    // Each stage names the word it is the first to require, in dependency order.
+    expect(terms.map((t) => t.replace('TERM', ''))).toEqual([
+      'Secret key / public key',
+      'Coefficient',
+      'Nonce',
+      'Challenge',
+      'mod n',
+      'Aggregate',
+    ]);
+
+    // The definitions are rendered from the same array the glossary uses, so a term
+    // shown beside a stage must exist in it — this is the drift guard.
+    const glossary = page.locator('#panel-session .glossary');
+    expect(await glossary.evaluate((d: HTMLDetailsElement) => d.open)).toBe(false);
+    await glossary.locator('summary').click();
+    const defined = await glossary.locator('dt').allTextContents();
+    for (const t of terms) expect(defined).toContain(t.replace('TERM', ''));
+  });
+});
+
+test.describe('the tab strip is the lesson map', () => {
+  test('marks exhibits the tour has finished, in words as well as colour', async ({ page }) => {
+    await page.goto('.');
+    // Outside the lesson there is no order to be ahead or behind of.
+    await expect(page.locator('.tab-tick')).toHaveCount(0);
+
+    await btn(page, '#tour-invite', 'Start the guided tour').click();
+    await expect(page.locator('.tab-btn.tab-done')).toHaveCount(0);
+
+    // Five Continues reach stop 6 (the nonce panel), by which point both rogue stops
+    // are behind us and no session stop is.
+    for (let i = 0; i < 5; i++) await btn(page, '#tour-bar', 'Continue').click();
+    await expect(page.locator('#tab-rogue')).toHaveClass(/tab-done/);
+    await expect(page.locator('#tab-session')).not.toHaveClass(/tab-done/);
+    // Colour is never the only channel: the state is in the accessible name too.
+    await expect(page.locator('#tab-rogue')).toHaveAccessibleName(/Rogue Key Attack.*done/);
+
+    await btn(page, '#tour-bar', 'Exit tour').click();
+    await expect(page.locator('.tab-tick')).toHaveCount(0);
+  });
+
+  test('the vectors tab is separated as evidence rather than a sixth chapter', async ({ page }) => {
+    await page.goto('.');
+    // A divider, not a reordering — the tablist still contains only tabs.
+    await expect(page.locator('.tab-list > *')).toHaveCount(5);
+    await expect(page.locator('.tab-list > :not([role="tab"])')).toHaveCount(0);
+    const border = await page
+      .locator('#tab-vectors')
+      .evaluate((el) => getComputedStyle(el).borderLeftStyle);
+    expect(border).toBe('solid');
+    // And no tour stop lands there, which is what the divider is claiming.
+    await btn(page, '#tour-invite', 'Start the guided tour').click();
+    for (let i = 0; i < 8; i++) {
+      await expect(page.locator('#tab-vectors')).toHaveAttribute('aria-selected', 'false');
+      await btn(page, '#tour-bar', 'Continue').click();
+    }
+  });
+});
+
 test.describe('bridges between exhibits', () => {
   test('every teaching panel says what it established and what comes next', async ({ page }) => {
     await page.goto('.');

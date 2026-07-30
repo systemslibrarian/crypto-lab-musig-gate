@@ -161,6 +161,35 @@ export interface TourController {
 }
 
 /**
+ * How far the lesson has got, per exhibit — enough for the tab strip to read as the
+ * lesson map rather than five unrelated destinations.
+ *
+ * `done` means every stop in that panel is behind us. Reported rather than applied
+ * here: `tour.ts` still knows nothing about tabs, and whoever owns them decides how
+ * to show it.
+ */
+export interface TourProgress {
+  active: boolean;
+  current: PanelKey | null;
+  done: Set<PanelKey>;
+}
+
+function progressAt(state: TourState): TourProgress {
+  const done = new Set<PanelKey>();
+  if (state.active) {
+    for (const panel of new Set(TOUR.map((s) => s.panel))) {
+      const stops = TOUR.map((s, i) => ({ s, i })).filter(({ s }) => s.panel === panel);
+      if (stops.every(({ i }) => i < state.index)) done.add(panel);
+    }
+  }
+  return {
+    active: state.active,
+    current: state.active ? TOUR[state.index].panel : null,
+    done,
+  };
+}
+
+/**
  * Mount the tour bar and return a controller.
  *
  * `selectTab` is injected rather than imported so this module has no opinion about
@@ -170,6 +199,7 @@ export function mountTour(
   host: HTMLElement,
   selectTab: (panel: PanelKey) => void,
   onReset: () => void,
+  onProgress: (progress: TourProgress) => void = () => {},
 ): TourController {
   let state = load();
 
@@ -244,6 +274,7 @@ export function mountTour(
   function render(): void {
     bar.hidden = !state.active;
     invitation.hidden = state.active;
+    onProgress(progressAt(state));
     if (!state.active) return;
     const stop = TOUR[state.index];
     label.textContent = `Step ${state.index + 1} of ${TOUR.length}: ${stop.title}`;

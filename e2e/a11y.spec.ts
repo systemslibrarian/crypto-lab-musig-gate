@@ -147,6 +147,12 @@ async function driveDemos(page: Page): Promise<void> {
   // start so the scan sees full-width values in every exhibit at once.
   await clickByText(page, '.byte-mode', 'Full bytes');
 
+  // The tab strip's lesson-map state exists only while the tour is running, so put
+  // the tour back and advance far enough that a completed-exhibit tick — a coloured
+  // tab plus visually-hidden text — is in the DOM to be scanned.
+  await clickByText(page, '#tour-invite', 'Start the guided tour');
+  for (let i = 0; i < 5; i++) await clickByText(page, '#tour-bar', 'Continue');
+
   // Reveal every panel and open every disclosure so all states are in the DOM.
   await page.evaluate(() => {
     document.querySelectorAll('details').forEach((d) => ((d as HTMLDetailsElement).open = true));

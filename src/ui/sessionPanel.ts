@@ -25,6 +25,7 @@ import {
   predictionDebrief,
   scrollRegion,
   short,
+  termAside,
   textControl,
   verdict,
 } from './dom.js';
@@ -38,36 +39,97 @@ import {
   runSession,
 } from '../musig/session.js';
 
+/**
+ * Every word this page uses that a newcomer might not have. One array, two
+ * consumers: the collapsed glossary at the top of the panel, and the single term
+ * each step card shows beside itself. Defining them twice would let them drift.
+ */
+const GLOSSARY: { term: string; plain: string; formal?: string }[] = [
+  {
+    term: 'Signer',
+    plain: 'One person or device holding one secret key. This lab writes u for how many there are.',
+  },
+  {
+    term: 'Secret key / public key',
+    plain: 'A secret number d, and the curve point P = d·G you can safely publish. Deriving d back from P is the problem nobody knows how to solve.',
+    formal: 'Written d_i and P_i below.',
+  },
+  {
+    term: 'Nonce',
+    plain: 'A fresh random number used for exactly one signature. Not a password, not reusable — reusing one across two messages leaks the secret key outright.',
+    formal: 'Written k for the secret and R = k·G for the public commitment.',
+  },
+  {
+    term: 'Challenge',
+    plain: 'A number derived by hashing the nonce, the key, and the message together. It is what ties a signature to one specific message.',
+    formal: 'Written e.',
+  },
+  {
+    term: 'Aggregate',
+    plain: 'Combine several things into one of the same kind. Here: many public keys into one public key, many nonces into one nonce, many partial signatures into one signature.',
+  },
+  {
+    term: 'Coefficient',
+    plain: 'A multiplier applied to someone’s key before adding it in, so that no one can steer the total by choosing their key last.',
+    formal: 'Written a_i for keys and b for nonces.',
+  },
+  {
+    term: 'x-only',
+    plain: 'A curve point has an x and a y. BIP-340 stores only x (32 bytes) and rebuilds y by convention, which is why the code keeps flipping signs to agree on which y was meant.',
+  },
+  {
+    term: 'n-of-n',
+    plain: 'Every listed signer must take part. Not a quorum: with three signers, three must sign, and losing one key loses the funds.',
+  },
+  {
+    term: 'mod n',
+    plain: 'Scalars wrap around at a fixed huge number n (the group order), the way clock arithmetic wraps at 12. Every "+" and "·" on secrets below is really "+ then wrap".',
+  },
+];
+
+/** The glossary entry for a term, by name. Throws at render time on a typo. */
+function term(name: string): { term: string; plain: string; formal?: string } {
+  const found = GLOSSARY.find((e) => e.term === name);
+  if (!found) throw new Error(`no glossary entry named "${name}"`);
+  return found;
+}
+
 const STEPS = [
   {
     tag: 'STEP 1',
     title: 'Every signer has an ordinary key',
     lead: 'Nothing special yet — u independent secp256k1 keypairs. Secret keys stay in this tab and are never sent anywhere.',
+    term: 'Secret key / public key',
   },
   {
     tag: 'STEP 2',
     title: 'The keys collapse into ONE key',
     lead: 'Each key gets a coefficient a_i derived from a hash of the entire key list, and Q = Σ a_i·P_i. This one aggregate key is what a chain or a verifier stores.',
+    term: 'Coefficient',
   },
   {
     tag: 'STEP 3',
     title: 'Round 1 — every signer commits TWO nonces',
     lead: 'Two, not one. The second nonce is what stops a signer who publishes last from steering the group’s nonce.',
+    term: 'Nonce',
   },
   {
     tag: 'STEP 4',
     title: 'The nonces collapse into ONE nonce',
     lead: 'Each half is summed separately, then combined as R = R_1 + b·R_2 where b is a hash of the aggregate nonce itself.',
+    term: 'Challenge',
   },
   {
     tag: 'STEP 5',
     title: 'Round 2 — each signer answers the same challenge',
     lead: 'One scalar each: s_i = k_i1 + b·k_i2 + e·a_i·d_i. The aggregator checks each one on its own before combining them.',
+    term: 'mod n',
   },
   {
     tag: 'STEP 6',
     title: 'The partial signatures collapse into ONE signature',
     lead: 'Add the scalars. That is the whole aggregation step — and the 64 bytes that come out are an ordinary BIP-340 signature.',
+    term: 'Aggregate',
   },
 ];
 
@@ -170,48 +232,7 @@ export function renderSessionPanel(root: HTMLElement): void {
       'MuSig2 does something better. The three of you combine your public keys into a single public key, combine fresh random values into a single random value, and each contribute one number toward a single signature. What comes out is one signature under one key — the same size and shape as a signature from one person, and accepted by software that has never heard of multisig.',
       'This panel runs that protocol for real and steps through it. Nothing below is precomputed or illustrative: every number is produced by the code in this page.',
     ),
-    glossary([
-      {
-        term: 'Signer',
-        plain: 'One person or device holding one secret key. This lab writes u for how many there are.',
-      },
-      {
-        term: 'Secret key / public key',
-        plain: 'A secret number d, and the curve point P = d·G you can safely publish. Deriving d back from P is the problem nobody knows how to solve.',
-        formal: 'Written d_i and P_i below.',
-      },
-      {
-        term: 'Nonce',
-        plain: 'A fresh random number used for exactly one signature. Not a password, not reusable — reusing one across two messages leaks the secret key outright.',
-        formal: 'Written k for the secret and R = k·G for the public commitment.',
-      },
-      {
-        term: 'Challenge',
-        plain: 'A number derived by hashing the nonce, the key, and the message together. It is what ties a signature to one specific message.',
-        formal: 'Written e.',
-      },
-      {
-        term: 'Aggregate',
-        plain: 'Combine several things into one of the same kind. Here: many public keys into one public key, many nonces into one nonce, many partial signatures into one signature.',
-      },
-      {
-        term: 'Coefficient',
-        plain: 'A multiplier applied to someone’s key before adding it in, so that no one can steer the total by choosing their key last.',
-        formal: 'Written a_i for keys and b for nonces.',
-      },
-      {
-        term: 'x-only',
-        plain: 'A curve point has an x and a y. BIP-340 stores only x (32 bytes) and rebuilds y by convention, which is why the code keeps flipping signs to agree on which y was meant.',
-      },
-      {
-        term: 'n-of-n',
-        plain: 'Every listed signer must take part. Not a quorum: with three signers, three must sign, and losing one key loses the funds.',
-      },
-      {
-        term: 'mod n',
-        plain: 'Scalars wrap around at a fixed huge number n (the group order), the way clock arithmetic wraps at 12. Every "+" and "·" on secrets below is really "+ then wrap".',
-      },
-    ]),
+    glossary(GLOSSARY),
     h(
       'div',
       { class: 'controls' },
@@ -633,6 +654,9 @@ export function renderSessionPanel(root: HTMLElement): void {
       h('span', { class: 'trace-tag' }, meta.tag),
       h('h3', {}, meta.title),
       h('p', { class: 'step-lead' }, meta.lead),
+      // The one word this stage is the first to need, so nobody has to go and open
+      // the glossary to follow the sentence they are reading.
+      termAside(term(meta.term)),
       body,
     );
   }

@@ -33,6 +33,17 @@ export function clear(node: HTMLElement): void {
   node.replaceChildren();
 }
 
+/**
+ * Text for assistive technology only.
+ *
+ * Used where a state is shown visually as an icon and a colour: WCAG 1.4.1 says
+ * colour cannot be the only channel, and a bare glyph is not a word. `display: none`
+ * would hide it from screen readers too, which is the opposite of the point.
+ */
+export function srOnly(text: string): HTMLElement {
+  return h('span', { class: 'sr-only' }, text);
+}
+
 // ------------------------------------------------------------- byte display
 //
 // Every intermediate value stays available — that is the point of the lab — but a
@@ -598,6 +609,30 @@ export function bridge(
           action.label,
         )
       : null,
+  );
+}
+
+/**
+ * The one term a stage actually needs, shown beside that stage.
+ *
+ * The full glossary stays collapsed at the top of the panel, but a newcomer who
+ * meets "nonce" in step 3 should not have to scroll back, open a ten-entry list and
+ * find the right row. This is a definition list rather than an `aside` on purpose:
+ * scaffolding, not a landmark, so it adds nothing for a screen reader to navigate
+ * past. Definitions come from the same array the glossary renders, so the two can
+ * never drift apart.
+ */
+export function termAside(entry: { term: string; plain: string; formal?: string }): HTMLElement {
+  return h(
+    'dl',
+    { class: 'term-aside' },
+    h('dt', {}, h('span', { class: 'term-aside-tag' }, 'TERM'), entry.term),
+    h(
+      'dd',
+      {},
+      entry.plain,
+      entry.formal ? h('span', { class: 'glossary-formal' }, ` ${entry.formal}`) : null,
+    ),
   );
 }
 
