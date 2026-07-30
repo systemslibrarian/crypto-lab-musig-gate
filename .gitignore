@@ -7,3 +7,5 @@ test-results/
 # Fleet-wide build spec and the demo brief — local working docs, not part of the demo
 CRYPTO-LAB-TEMPLATE*.md
 brief.txt
+# Review notes kept locally, not part of the shipped demo
+chat.md
