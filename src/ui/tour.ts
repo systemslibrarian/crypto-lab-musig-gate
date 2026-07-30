@@ -51,8 +51,16 @@ export function registerTourAction(name: string, fn: () => void): void {
 }
 
 /**
- * Nine stops. The shape is deliberate: promise, predict, run, break, repair, break,
- * repair, return to the promise, prove you can transfer it.
+ * Ten stops. The shape is deliberate: promise, predict, run, break, repair, SEE the
+ * repair, break, repair, return to the promise, prove you can transfer it.
+ *
+ * The "see the repair" stop was added after the rest: without it the tour showed
+ * coefficients defeating the rogue-key attack — the attacker missing round after
+ * round — without ever showing what a coefficient does to a key. That is the
+ * difference between "it works" and "I know why", and the drawable F_127 group is
+ * the only place on the page where the answer is a picture rather than more hex.
+ * It also closed a hole in the tab strip's lesson map, where Key Aggregation was the
+ * one teaching exhibit no stop ever reached.
  */
 export const TOUR: TourStop[] = [
   {
@@ -89,6 +97,13 @@ export const TOUR: TourStop[] = [
     anchor: 'tour-rogue-fixed',
     blurb:
       'Now run the identical attack against Q = Σa_i·P_i. The coefficients are what stop it, and the round-by-round table shows the attacker never converging.',
+  },
+  {
+    title: 'See what a coefficient does',
+    panel: 'keyagg',
+    anchor: 'tour-keyagg-drawn',
+    blurb:
+      'You have now seen coefficients stop the attack, but not what they actually do to a key. Here is the same construction on a group small enough to draw: 127 points, each key marked, an arrow to where its coefficient sent it, and the naive sum landing somewhere else entirely.',
   },
   {
     title: 'Break naive nonce aggregation',

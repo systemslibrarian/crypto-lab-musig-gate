@@ -124,7 +124,9 @@ export function renderKeyAggPanel(root: HTMLElement): void {
     output,
     h(
       'section',
-      { class: 'compare-block curve-section' },
+      // The tour's coefficient stop anchors here: it is the one place on the page
+      // where what a_i DOES to a key is visible rather than asserted in hex.
+      { class: 'compare-block curve-section', id: 'tour-keyagg-drawn' },
       h('h3', {}, 'See it on a curve you can actually see'),
       h(
         'p',

@@ -531,7 +531,7 @@ test.describe('the byte-display switch', () => {
 });
 
 test.describe('the guided tour', () => {
-  test('walks nine stops and drives the tabs across them', async ({ page }) => {
+  test('walks ten stops and drives the tabs across them', async ({ page }) => {
     const errors = noPageErrors(page);
     await page.goto('.');
     // The invitation is the dominant first action; the bar only appears once started.
@@ -543,18 +543,22 @@ test.describe('the guided tour', () => {
     await expect(page.locator('#tour-invite')).toBeHidden();
 
     const seenTabs = new Set<string>();
-    for (let i = 1; i <= 9; i++) {
-      await expect(page.locator('.tour-label')).toContainText(`Step ${i} of 9`);
+    for (let i = 1; i <= 10; i++) {
+      await expect(page.locator('.tour-label')).toContainText(`Step ${i} of 10`);
       seenTabs.add((await page.locator('.tab-btn[aria-selected="true"]').innerText()).trim());
       // Progress is visible, not just internal state.
       await expect(page.locator('.tour-dot-now')).toHaveCount(1);
       await expect(page.locator('.tour-dot-done')).toHaveCount(i - 1);
-      if (i < 9) await page.locator('.tour-actions button', { hasText: 'Continue' }).click();
+      if (i < 10) await page.locator('.tour-actions button', { hasText: 'Continue' }).click();
     }
-    // The lesson genuinely crosses exhibits rather than staying in one tab.
+    // The lesson genuinely crosses exhibits rather than staying in one tab — and
+    // reaches every teaching exhibit, which is what leaves no gap in the lesson map.
     expect(seenTabs.has('Signing Session')).toBe(true);
+    expect(seenTabs.has('Key Aggregation')).toBe(true);
     expect(seenTabs.has('Rogue Key Attack')).toBe(true);
     expect(seenTabs.has('Why Two Nonces')).toBe(true);
+    // The evidence tab is the one exhibit the lesson deliberately never visits.
+    expect(seenTabs.has('BIP-327 Vectors')).toBe(false);
 
     await page.locator('.tour-actions button', { hasText: 'Finish' }).click();
     await expect(page.locator('#tour-invite')).toBeVisible();
@@ -566,17 +570,17 @@ test.describe('the guided tour', () => {
     await btn(page, '#tour-invite', 'Start the guided tour').click();
     await page.locator('.tour-actions button', { hasText: 'Continue' }).click();
     await page.locator('.tour-actions button', { hasText: 'Continue' }).click();
-    await expect(page.locator('.tour-label')).toContainText('Step 3 of 9');
+    await expect(page.locator('.tour-label')).toContainText('Step 3 of 10');
     await page.reload();
-    await expect(page.locator('.tour-label')).toContainText('Step 3 of 9');
+    await expect(page.locator('.tour-label')).toContainText('Step 3 of 10');
   });
 
   test('the blind challenge exists when the tour jumps to it', async ({ page }) => {
-    // Stop 8 anchors on a section that only renders once every step is revealed, so
+    // Stop 9 anchors on a section that only renders once every step is revealed, so
     // the tour has to put the panel into that state itself.
     await page.goto('.');
     await btn(page, '#tour-invite', 'Start the guided tour').click();
-    for (let i = 0; i < 7; i++) {
+    for (let i = 0; i < 8; i++) {
       await page.locator('.tour-actions button', { hasText: 'Continue' }).click();
     }
     await expect(page.locator('.tour-label')).toContainText('Back to the promise');
@@ -590,7 +594,7 @@ test.describe('the guided tour', () => {
     await expect(page.locator('#panel-session .predict-status')).toContainText('recorded');
     await btn(page, '#tour-invite', 'Start the guided tour').click();
     await page.locator('.tour-actions button', { hasText: 'Start over' }).click();
-    await expect(page.locator('.tour-label')).toContainText('Step 1 of 9');
+    await expect(page.locator('.tour-label')).toContainText('Step 1 of 10');
     await expect(page.locator('#panel-session .predict-status')).toBeEmpty();
   });
 });
@@ -741,7 +745,7 @@ test.describe('the tab strip is the lesson map', () => {
     expect(border).toBe('solid');
     // And no tour stop lands there, which is what the divider is claiming.
     await btn(page, '#tour-invite', 'Start the guided tour').click();
-    for (let i = 0; i < 8; i++) {
+    for (let i = 0; i < 9; i++) {
       await expect(page.locator('#tab-vectors')).toHaveAttribute('aria-selected', 'false');
       await btn(page, '#tour-bar', 'Continue').click();
     }
