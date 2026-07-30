@@ -34,6 +34,19 @@ export function clear(node: HTMLElement): void {
 }
 
 /**
+ * Bring an element into view, honouring the user's motion preference.
+ *
+ * `@media (prefers-reduced-motion)` sets `scroll-behavior: auto`, but a `behavior`
+ * passed to scrollIntoView overrides the stylesheet — so the CSS says one thing and
+ * the JS quietly does another. Asking matchMedia here is what actually keeps that
+ * promise.
+ */
+export function scrollIntoCentre(target: Element): void {
+  const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+  target.scrollIntoView({ block: 'center', behavior: reduce ? 'auto' : 'smooth' });
+}
+
+/**
  * Text for assistive technology only.
  *
  * Used where a state is shown visually as an icon and a colour: WCAG 1.4.1 says

@@ -20,7 +20,7 @@
  * Progress lives in sessionStorage so a reload mid-lesson does not lose the thread,
  * and dies with the tab so the next visitor starts fresh.
  */
-import { clear, h } from './dom.js';
+import { clear, h, scrollIntoCentre } from './dom.js';
 
 export type PanelKey = 'session' | 'keyagg' | 'rogue' | 'nonce' | 'vectors';
 
@@ -284,16 +284,37 @@ export function mountTour(
     ),
   );
 
-  host.append(invitation, bar);
+  /**
+   * Continue changes the selected tab, scrolls somewhere else and sometimes puts a
+   * panel into a new state — visually obvious, and completely silent to a screen
+   * reader. This says what just happened.
+   *
+   * A live region rather than moving focus: focus belongs on Continue so the lesson
+   * can be walked by pressing the same key ten times. It lives outside the bar and
+   * stays in the DOM permanently, because a live region that is inserted or unhidden
+   * at the same moment its text changes is not reliably announced.
+   */
+  const announcer = h('div', {
+    class: 'sr-only',
+    role: 'status',
+    'aria-live': 'polite',
+    'aria-atomic': 'true',
+  });
+
+  host.append(invitation, bar, announcer);
 
   function render(): void {
     bar.hidden = !state.active;
     invitation.hidden = state.active;
     onProgress(progressAt(state));
-    if (!state.active) return;
+    if (!state.active) {
+      announcer.textContent = '';
+      return;
+    }
     const stop = TOUR[state.index];
     label.textContent = `Step ${state.index + 1} of ${TOUR.length}: ${stop.title}`;
     blurb.textContent = stop.blurb;
+    announcer.textContent = `Step ${state.index + 1} of ${TOUR.length}. ${stop.title}. ${stop.blurb}`;
     continueBtn.textContent =
       state.index === TOUR.length - 1 ? 'Finish' : `Continue → ${TOUR[state.index + 1].title}`;
     clear(dots);
@@ -314,7 +335,7 @@ export function mountTour(
     requestAnimationFrame(() => {
       const target = document.getElementById(stop.anchor);
       if (target) {
-        target.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        scrollIntoCentre(target);
         target.classList.add('tour-flash');
         setTimeout(() => target.classList.remove('tour-flash'), 1400);
       }
@@ -336,7 +357,7 @@ export function mountTour(
     state = { active: false, index: state.index };
     save(state);
     render();
-    invitation.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    scrollIntoCentre(invitation);
   }
 
   function next(): void {

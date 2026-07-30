@@ -752,6 +752,107 @@ test.describe('the tab strip is the lesson map', () => {
   });
 });
 
+test.describe('degrading honestly', () => {
+  test('a panel that cannot render says so instead of going blank', async ({ page }) => {
+    // A real failure mode, not a synthetic one: this lab generates every key and
+    // nonce with WebCrypto the moment a panel renders, and WebCrypto is absent on an
+    // insecure origin. Break it and the exhibit must explain itself.
+    await page.addInitScript(() => {
+      Object.defineProperty(crypto, 'getRandomValues', {
+        value: () => {
+          throw new Error('getRandomValues is not available in this context');
+        },
+      });
+    });
+    await page.goto('.');
+    const panel = page.locator('#panel-session');
+    await expect(panel).toContainText('This exhibit could not run');
+    await expect(panel.locator('.verdict-fail')).toContainText('getRandomValues');
+    await expect(panel).toContainText('WebCrypto');
+    // Blank is the failure this replaces.
+    expect((await panel.innerText()).trim().length).toBeGreaterThan(50);
+
+    // And the failure is contained: switching tabs still works, and each exhibit
+    // reports for itself rather than taking the page down.
+    await page.locator('#tab-vectors').click();
+    await expect(page.locator('#panel-vectors')).toBeVisible();
+  });
+
+  test('the page states plainly that it needs JavaScript', async ({ page }) => {
+    await page.goto('.');
+    const text = await page.locator('noscript').innerText({ timeout: 2000 }).catch(() => '');
+    const html = await page.locator('noscript').innerHTML();
+    // innerText is empty for a non-rendered noscript, so assert on the markup.
+    expect(html + text).toContain('needs JavaScript');
+    expect(html + text).toContain('Nothing here is precomputed');
+  });
+});
+
+test.describe('motion and announcements', () => {
+  test('the tour announces each stop to a screen reader', async ({ page }) => {
+    await page.goto('.');
+    const live = page.locator('[role="status"][aria-live="polite"]').first();
+    // Present before the tour starts, and empty — a live region inserted at the same
+    // moment its text changes is not reliably announced.
+    await expect(live).toHaveCount(1);
+    await expect(live).toBeEmpty();
+
+    await btn(page, '#tour-invite', 'Start the guided tour').click();
+    await expect(live).toContainText('Step 1 of 10');
+    await expect(live).toContainText('The promise');
+    await btn(page, '#tour-bar', 'Continue').click();
+    await expect(live).toContainText('Step 2 of 10');
+    // It carries the instruction too, not just the position.
+    await expect(live).toContainText('commit to one');
+
+    await btn(page, '#tour-bar', 'Exit tour').click();
+    await expect(live).toBeEmpty();
+  });
+
+  /**
+   * Asserted on the first animation frame after the click, because that is the only
+   * thing that actually differs. `@media (prefers-reduced-motion)` sets
+   * `scroll-behavior: auto`, but a `behavior` argument to scrollIntoView overrides
+   * the stylesheet — measured, all three engines animate right through the
+   * preference unless the JS asks for it. A wall-clock budget does NOT discriminate:
+   * this test passed against the unfixed code until it was rewritten this way.
+   */
+  const scrollSettlesInstantly = (page: Page): Promise<boolean> =>
+    page.evaluate(async () => {
+      const go = [...document.querySelectorAll('.tour-actions button')].find((b) =>
+        (b.textContent ?? '').startsWith('Continue'),
+      ) as HTMLButtonElement;
+      go.click();
+      const at = (): Promise<number> =>
+        new Promise((res) => requestAnimationFrame(() => res(Math.round(window.scrollY))));
+      const firstFrame = await at();
+      for (let i = 0; i < 45; i++) await at(); // let any animation finish
+      return firstFrame === (await at());
+    });
+
+  test('reduced motion means the jump is instant, not animated', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.goto('.');
+    await btn(page, '#tour-invite', 'Start the guided tour').click();
+    // Two stops in, so the next Continue is the tour's biggest jump: a different tab,
+    // far down the page.
+    for (let i = 0; i < 2; i++) await btn(page, '#tour-bar', 'Continue').click();
+    await page.waitForTimeout(400);
+    expect(await scrollSettlesInstantly(page)).toBe(true);
+  });
+
+  test('without that preference the same jump is animated', async ({ page }) => {
+    // The other half of the pair: proves the assertion above is measuring the
+    // preference rather than something that was always true.
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
+    await page.goto('.');
+    await btn(page, '#tour-invite', 'Start the guided tour').click();
+    for (let i = 0; i < 2; i++) await btn(page, '#tour-bar', 'Continue').click();
+    await page.waitForTimeout(400);
+    expect(await scrollSettlesInstantly(page)).toBe(false);
+  });
+});
+
 test.describe('bridges between exhibits', () => {
   test('every teaching panel says what it established and what comes next', async ({ page }) => {
     await page.goto('.');

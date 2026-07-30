@@ -156,6 +156,16 @@
 </script>
 <!-- END crypto-lab shared header -->
     <div id="app" tabindex="-1">
+      <!-- Every number on this page is computed in the browser, so there is no static
+           version to fall back to. Say that plainly rather than showing empty tabs. -->
+      <noscript>
+        <p class="callout callout-danger">
+          This lab needs JavaScript. Nothing here is precomputed — the keys, nonces,
+          signatures and the BIP-327 test vectors are all generated and checked in your
+          browser as you read, so with scripting disabled there is nothing to show. The
+          source is on GitHub if you would rather read it than run it.
+        </p>
+      </noscript>
       <div class="cl-hero">
         <div class="cl-hero-main">
           <h1 class="cl-hero-title">MuSig Gate</h1>

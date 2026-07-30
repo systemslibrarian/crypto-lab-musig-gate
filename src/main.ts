@@ -1,5 +1,5 @@
 import './style.css';
-import { byteModeControl, h, resetPredictions, srOnly } from './ui/dom.js';
+import { byteModeControl, h, note, panelIntro, resetPredictions, srOnly, verdict } from './ui/dom.js';
 import { type PanelKey, type TourProgress, mountTour } from './ui/tour.js';
 import { renderSessionPanel } from './ui/sessionPanel.js';
 import { renderKeyAggPanel } from './ui/keyaggPanel.js';
@@ -21,9 +21,37 @@ function panelEl(key: PanelKey): HTMLElement {
   return document.getElementById(`panel-${key}`) as HTMLElement;
 }
 
+/**
+ * Render a panel, and say so out loud if it cannot be rendered.
+ *
+ * Without this a throwing exhibit leaves an empty tab and a message only in the
+ * devtools console — the learner sees a blank page and has no idea whether that is
+ * the demo or their browser. Real causes exist: WebCrypto is absent on an insecure
+ * origin, and every panel generates keys the moment it renders.
+ *
+ * The panel is marked rendered either way, so a failure costs one blank exhibit
+ * rather than re-throwing on every tab switch, and the error is still re-reported to
+ * the console for anyone who wants the stack.
+ */
 function ensureRendered(key: PanelKey): void {
   if (rendered.has(key)) return;
-  renderers[key](panelEl(key));
+  const el = panelEl(key);
+  try {
+    renderers[key](el);
+  } catch (err) {
+    console.error(`panel "${key}" failed to render`, err);
+    el.replaceChildren(
+      panelIntro(
+        'This exhibit could not run',
+        'Something in this panel threw while rendering. That is a bug in this page or a capability its browser is missing — not a property of MuSig2, and not a result you should read anything into.',
+      ),
+      verdict('fail', (err as Error)?.message ?? String(err), 'Error'),
+      note(
+        'caveat',
+        'The most common cause is a browser without WebCrypto, which this lab needs to generate keys and nonces — it is unavailable on pages served over plain HTTP from anything other than localhost. Reloading over HTTPS usually fixes it.',
+      ),
+    );
+  }
   rendered.add(key);
 }
 
