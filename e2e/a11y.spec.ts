@@ -9,8 +9,8 @@ const TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'];
  * Axe only checks what is in the DOM, and this lab renders each tab lazily and
  * fills dynamic result regions on click — so an unscanned state is an ungated
  * state. This driver walks all five exhibits, steps the signing session to its
- * final step, answers the blind lone-signer challenge both ways, fires both attacks
- * in both their broken and fixed modes, runs the hand-supplied rogue-key path
+ * final step, answers the blind lone-signer challenge both ways, fires every attack
+ * — rogue-key, nonce steering, Wagner and ROS — in both its broken and fixed mode, runs the hand-supplied rogue-key path
  * (including its malformed-input rejection), trips the tamper and drop-a-signer
  * failure paths, and opens every disclosure, glossary and learner check so the
  * feedback live regions are populated too.
@@ -90,6 +90,14 @@ async function driveDemos(page: Page): Promise<void> {
     .waitFor({ timeout: 60_000 })
     .catch(() => {});
   await clickByText(page, '#panel-nonce', 'Try to fix a target under two nonces');
+  // The full-width ROS forgery and its two-nonce counterpart.
+  await clickByText(page, '#panel-nonce', 'Forge at full 256-bit width');
+  await page
+    .locator('#panel-nonce .ros-section .verdict')
+    .first()
+    .waitFor({ timeout: 60_000 })
+    .catch(() => {});
+  await clickByText(page, '#panel-nonce', 'Run ROS against two nonces');
   await page.waitForTimeout(150);
 
   // --- Exhibit 5: the BIP-327 vectors (renders on first activation) ---------

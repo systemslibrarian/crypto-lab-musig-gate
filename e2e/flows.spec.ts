@@ -276,7 +276,7 @@ test.describe('why two nonces', () => {
     await page.locator('#tab-nonce').click();
     await btn(page, '#panel-nonce', 'Try the same trick against two nonces').click();
 
-    const fixed = page.locator('#panel-nonce .attack-fixed');
+    const fixed = page.locator('#panel-nonce .grind-fixed');
     await expect(fixed.locator('.verdict-pass')).toContainText('Attack failed');
     await expect(fixed.locator('.pill', { hasText: 'HIT' })).toHaveCount(0);
     const target = await fixed
@@ -373,7 +373,7 @@ test.describe('the Wagner forgery', () => {
     await page.locator('#tab-nonce').click();
     await btn(page, '#panel-nonce', 'Try to fix a target under two nonces').click();
 
-    const section = page.locator('#panel-nonce .attack-fixed').last();
+    const section = page.locator('#panel-nonce .wagner-fixed');
     await expect(section.locator('.verdict-pass').first()).toContainText('No fixed target');
     // Every probed nonce assignment produced a different target.
     const rows = section.locator('table tbody tr');
@@ -383,6 +383,38 @@ test.describe('the Wagner forgery', () => {
     // The completed attempt is rejected by the same verifier.
     await expect(section.locator('.verdict-pass', { hasText: 'Attack failed' })).toBeVisible();
     await expect(section.locator('.verdict-alarm')).toHaveCount(0);
+  });
+
+  test('the ROS attack forges at FULL width, with nothing reduced', async ({ page }) => {
+    const errors = noPageErrors(page);
+    await page.goto('.');
+    await page.locator('#tab-nonce').click();
+    await btn(page, '#panel-nonce', 'Forge at full 256-bit width').click();
+
+    const section = page.locator('#panel-nonce .ros-section');
+    await expect(section.locator('.verdict-alarm')).toContainText('Forged', { timeout: 60_000 });
+    // The distinguishing claim versus Wagner: no reduced parameter anywhere.
+    await expect(section).toContainText('256 bits');
+    await expect(section).toContainText('none');
+    // 256 sessions, 257 signatures — one more than were authorised.
+    await expect(section).toContainText('257');
+    // The linear relation must hold exactly.
+    await expect(section.locator('.both-sides .verdict-pass')).toContainText('match exactly');
+    await expect(section.locator('.msg-forged')).toHaveCount(1);
+    expect(errors).toEqual([]);
+  });
+
+  test('ROS against two nonces loses its constant target and is rejected', async ({ page }) => {
+    await page.goto('.');
+    await page.locator('#tab-nonce').click();
+    await btn(page, '#panel-nonce', 'Run ROS against two nonces').click();
+
+    const section = page.locator('#panel-nonce .ros-fixed');
+    await expect(section.locator('.verdict-pass', { hasText: 'Attack failed' })).toBeVisible();
+    await expect(section.locator('.verdict-alarm')).toHaveCount(0);
+    // Both comparisons must show a mismatch: the target moved, so the relation broke.
+    await expect(section.locator('.both-sides .verdict-fail')).toHaveCount(2);
+    await expect(section).toContainText('constant right-hand side');
   });
 
   test('is honest about what it does not cover', async ({ page }) => {

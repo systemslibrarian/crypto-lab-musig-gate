@@ -218,32 +218,6 @@ export function runSession(
 }
 
 /**
- * The comparison that lands the "aha": the SAME 64 bytes handed to a verifier that
- * knows nothing about MuSig, alongside a genuine one-signer signature. Both are
- * 64 bytes; both verify; nothing in either reveals how many signers there were.
- */
-export function indistinguishability(result: SessionResult): {
-  signatureBytes: number;
-  aggregateKeyBytes: number;
-  signerCount: number;
-  handRolledValid: boolean;
-  nobleValid: boolean;
-  agree: boolean;
-} {
-  const sig = hexToBytes(result.aggregation.signatureHex);
-  const pk = hexToBytes(result.aggregateKeyX);
-  const msg = hexToBytes(result.messageDigest);
-  return {
-    signatureBytes: sig.length,
-    aggregateKeyBytes: pk.length,
-    signerCount: result.signers.length,
-    handRolledValid: result.verdict.valid,
-    nobleValid: nobleVerify(sig, msg, pk),
-    agree: result.verdict.valid === nobleVerify(sig, msg, pk),
-  };
-}
-
-/**
  * The lab's headline claim, set up as something a learner can be TESTED on rather
  * than told.
  *
@@ -270,6 +244,8 @@ export interface LoneSignerComparison {
   groupSlot: 0 | 1;
   messageDigest: string;
   signerCount: number;
+  /** The hand-rolled and library verifiers agreed on the group's own signature. */
+  verifiersAgree: boolean;
   /** True when nothing observable separates the two — the claim being tested. */
   indistinguishable: boolean;
   /** The specific properties compared, so "indistinguishable" is not a bare claim. */
@@ -339,6 +315,7 @@ export function loneSignerComparison(result: SessionResult): LoneSignerCompariso
     groupSlot,
     messageDigest: result.messageDigest,
     signerCount: result.signers.length,
+    verifiersAgree: group.valid === group.nobleValid,
     indistinguishable: comparedProperties.every((p) => p.same),
     comparedProperties,
   };

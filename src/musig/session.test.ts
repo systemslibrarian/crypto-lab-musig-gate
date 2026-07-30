@@ -3,7 +3,6 @@ import { bytesToHex, hexToBytes, individualPubkey } from './field.js';
 import { nobleVerify } from './bip340.js';
 import {
   dropOneSigner,
-  indistinguishability,
   loneSignerComparison,
   makeSigners,
   messageDigest,
@@ -105,31 +104,6 @@ describe('runSession', () => {
   });
 });
 
-describe('indistinguishability', () => {
-  it('reports 64 signature bytes and 32 key bytes regardless of signer count', () => {
-    for (const n of [2, 3, 4, 5]) {
-      const info = indistinguishability(runSession(makeSigners(n), TEXT));
-      expect(info.signatureBytes).toBe(64);
-      expect(info.aggregateKeyBytes).toBe(32);
-      expect(info.signerCount).toBe(n);
-      expect(info.handRolledValid).toBe(true);
-      expect(info.nobleValid).toBe(true);
-      expect(info.agree).toBe(true);
-    }
-  });
-
-  it('the aggregate signature verifies through the stock library verifier', () => {
-    const r = runSession(makeSigners(4), TEXT);
-    expect(
-      nobleVerify(
-        hexToBytes(r.aggregation.signatureHex),
-        hexToBytes(r.messageDigest),
-        hexToBytes(r.aggregateKeyX),
-      ),
-    ).toBe(true);
-  });
-});
-
 describe('loneSignerComparison — the headline claim, tested', () => {
   it('produces a real single-signer signature that the same verifier accepts', () => {
     const cmp = loneSignerComparison(runSession(makeSigners(3), TEXT));
@@ -148,7 +122,21 @@ describe('loneSignerComparison — the headline claim, tested', () => {
       expect(cmp.signerCount).toBe(n);
       expect(cmp.comparedProperties.every((p) => p.same)).toBe(true);
       expect(cmp.indistinguishable).toBe(true);
+      // Constant size regardless of signer count, and the two verifiers agree.
+      expect(cmp.slots.every((s) => s.signatureBytes === 64 && s.keyBytes === 32)).toBe(true);
+      expect(cmp.verifiersAgree).toBe(true);
     }
+  });
+
+  it('the aggregate signature verifies through the stock library verifier', () => {
+    const r = runSession(makeSigners(4), TEXT);
+    expect(
+      nobleVerify(
+        hexToBytes(r.aggregation.signatureHex),
+        hexToBytes(r.messageDigest),
+        hexToBytes(r.aggregateKeyX),
+      ),
+    ).toBe(true);
   });
 
   it('the group signature really is in the slot it claims, and the other really is not', () => {

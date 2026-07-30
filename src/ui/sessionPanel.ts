@@ -28,7 +28,6 @@ import {
   type SessionResult,
   type Signer,
   dropOneSigner,
-  indistinguishability,
   loneSignerComparison,
   makeSigners,
   runSession,
@@ -567,8 +566,9 @@ export function renderSessionPanel(root: HTMLElement): void {
   // ---------------------------------------------------------------- the "aha"
 
   function verifySection(r: SessionResult): HTMLElement {
-    const info = indistinguishability(r);
     const state: 'pass' | 'fail' = r.verdict.valid ? 'pass' : 'fail';
+    const sig = r.aggregation.signatureHex.length / 2;
+    const key = r.aggregateKeyX.length / 2;
     return h(
       'div',
       { class: 'aha' },
@@ -582,13 +582,13 @@ export function renderSessionPanel(root: HTMLElement): void {
       h(
         'ul',
         { class: 'facts', role: 'list' },
-        h('li', { role: 'listitem' }, `Signers who took part: ${info.signerCount}`),
-        h('li', { role: 'listitem' }, `Signature size: ${info.signatureBytes} bytes — the same as one signer’s`),
-        h('li', { role: 'listitem' }, `Public key size: ${info.aggregateKeyBytes} bytes — the same as one signer’s`),
+        h('li', { role: 'listitem' }, `Signers who took part: ${r.signers.length}`),
+        h('li', { role: 'listitem' }, `Signature size: ${sig} bytes — the same as one signer’s`),
+        h('li', { role: 'listitem' }, `Public key size: ${key} bytes — the same as one signer’s`),
         h(
           'li',
           { role: 'listitem' },
-          `Independent check with @noble/curves’ own verifier: ${info.nobleValid ? 'also valid' : 'also rejected'}${info.agree ? ' (the two implementations agree)' : ' — DISAGREEMENT, which must never happen'}`,
+          `Independent check with @noble/curves’ own verifier: ${r.verdict.nobleValid ? 'also valid' : 'also rejected'}${r.verdict.disagreement ? ' — DISAGREEMENT, which must never happen' : ' (the two implementations agree)'}`,
         ),
       ),
       r.verdict.lhs && r.verdict.rhs

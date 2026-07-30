@@ -35,6 +35,7 @@ import {
   randomTargetNonce,
 } from '../musig/noncecontrol.js';
 import { attemptTwoNonceForgery, forgeSingleNonce } from '../musig/wagner.js';
+import { attemptRosTwoNonce, forgeRos } from '../musig/ros.js';
 
 const MSG = sha256(utf8('the message under attack'));
 
@@ -92,6 +93,20 @@ export function renderNoncePanel(root: HTMLElement): void {
     'button',
     { type: 'button', class: 'btn btn-primary', onclick: () => runTwoNonceForge() },
     'Try to fix a target under two nonces',
+  ) as HTMLButtonElement;
+
+  const rosOut = h('div', { class: 'output', role: 'status', 'aria-live': 'polite' });
+  const rosTwoOut = h('div', { class: 'output', role: 'status', 'aria-live': 'polite' });
+  const rosStatus = h('span', { class: 'step-progress' });
+  const rosBtn = h(
+    'button',
+    { type: 'button', class: 'btn btn-primary', onclick: () => runRos() },
+    'Forge at full 256-bit width',
+  ) as HTMLButtonElement;
+  const rosTwoBtn = h(
+    'button',
+    { type: 'button', class: 'btn btn-primary', onclick: () => runRosTwo() },
+    'Run ROS against two nonces',
   ) as HTMLButtonElement;
 
   root.append(
@@ -164,7 +179,7 @@ export function renderNoncePanel(root: HTMLElement): void {
 
     h(
       'section',
-      { class: 'attack-block attack-fixed' },
+      { class: 'attack-block attack-fixed grind-fixed' },
       h('h3', {}, h('span', { class: 'pill pill-ok' }, 'BIP-327'), ' Two nonces each: R = R_1 + b·R_2'),
       h(
         'p',
@@ -207,7 +222,7 @@ export function renderNoncePanel(root: HTMLElement): void {
     ),
     h(
       'section',
-      { class: 'attack-block attack-fixed' },
+      { class: 'attack-block attack-fixed wagner-fixed' },
       h(
         'h3',
         {},
@@ -221,6 +236,46 @@ export function renderNoncePanel(root: HTMLElement): void {
       ),
       h('div', { class: 'action-row' }, twoBtn),
       twoOutWagner,
+    ),
+
+    h(
+      'section',
+      { class: 'attack-block attack-broken ros-section' },
+      h(
+        'h3',
+        {},
+        h('span', { class: 'pill pill-bad' }, 'BROKEN'),
+        ' The same break with nothing reduced at all',
+      ),
+      h(
+        'p',
+        { class: 'help' },
+        'The forgery above had to truncate the challenge so a birthday search would finish. This one does not truncate anything. It is the polynomial-time ROS attack of Benhamouda, Lepoint, Loss, Orrù and Raykova (2020), and against a single-nonce scheme it is pure linear algebra: 256 concurrent sessions, two candidate challenges computed offline per session, and the bit pattern falls out of one modular subtraction. No search anywhere.',
+      ),
+      h(
+        'p',
+        { class: 'help' },
+        'Full 256-bit challenge, real secp256k1, real key-aggregation coefficients, a signing oracle that refuses to reuse a nonce, and the same verifier. 256 sessions in, 257 signatures out.',
+      ),
+      h('div', { class: 'action-row' }, rosBtn, rosStatus),
+      rosOut,
+    ),
+    h(
+      'section',
+      { class: 'attack-block attack-fixed ros-fixed' },
+      h(
+        'h3',
+        {},
+        h('span', { class: 'pill pill-ok' }, 'BIP-327'),
+        ' ROS against two nonces',
+      ),
+      h(
+        'p',
+        { class: 'help' },
+        'The linear system is exactly as solvable. What it loses is a constant right-hand side — and a linear system whose target moves when you write down the solution is not a system you can solve.',
+      ),
+      h('div', { class: 'action-row' }, rosTwoBtn),
+      rosTwoOut,
     ),
 
     disclosure(
@@ -533,6 +588,137 @@ export function renderNoncePanel(root: HTMLElement): void {
         r.verified
           ? 'the forgery was accepted, which must not happen under the two-nonce construction'
           : 'the same verifier that accepted the single-nonce forgery rejects this one',
+        r.verified ? 'Forged' : 'Attack failed',
+      ),
+      h('p', { class: 'help' }, r.explanation),
+    );
+  }
+
+  function runRos(): void {
+    clear(rosOut);
+    rosBtn.disabled = true;
+    rosStatus.textContent = 'opening 256 sessions…';
+    setTimeout(() => {
+      const started = performance.now();
+      try {
+        const r = forgeRos();
+        const elapsed = Math.round(performance.now() - started);
+        rosOut.append(
+          h(
+            'div',
+            { class: 'wagner-stats' },
+            stat('Challenge width', `${r.challengeBits} bits`),
+            stat('Reduced parameters', 'none'),
+            stat('Concurrent sessions', String(r.sessions)),
+            stat('Signatures obtained', String(r.signaturesObtained)),
+            stat('Scalar mults', String(r.scalarMultiplications)),
+            stat('Time', `${elapsed} ms`),
+          ),
+          h(
+            'p',
+            { class: 'help' },
+            `The honest signer authorised ${r.queriedMessageCount} routine payments and nothing else. It now also has a valid signature against it on:`,
+          ),
+          h(
+            'ul',
+            { class: 'msg-list', role: 'list' },
+            h('li', { role: 'listitem', class: 'msg-forged' }, r.forgedMessage),
+          ),
+          scrollRegion(
+            'A sample of the 256 sessions',
+            h(
+              'table',
+              { class: 'kat-table' },
+              h(
+                'thead',
+                {},
+                h(
+                  'tr',
+                  {},
+                  h('th', { scope: 'col' }, 'Session'),
+                  h('th', { scope: 'col' }, 'Honest nonce R_i'),
+                  h('th', { scope: 'col' }, 'Bit of B'),
+                  h('th', { scope: 'col' }, 'Offset α published'),
+                ),
+              ),
+              h(
+                'tbody',
+                {},
+                ...r.sampleSessions.map((d) =>
+                  h(
+                    'tr',
+                    {},
+                    h('th', { scope: 'row' }, String(d.index + 1)),
+                    h('td', {}, h('code', {}, short(d.honestNonceX, 8))),
+                    h('td', {}, h('code', {}, String(d.bit))),
+                    h('td', {}, h('code', {}, String(d.alpha))),
+                  ),
+                ),
+                h(
+                  'tr',
+                  {},
+                  h('th', { scope: 'row' }, '…'),
+                  h('td', { colspan: '3' }, `${r.sessions - r.sampleSessions.length} more sessions, ${r.onesInB} of the 256 bits set`),
+                ),
+              ),
+            ),
+          ),
+          bothSides(
+            'The linear relation the attack had to satisfy — solved, not searched for:',
+            { label: 'Σ ρ_i·e_i', value: r.sumRhoE },
+            { label: 'e* for the forged message', value: r.eStar },
+          ),
+          field('Aggregate key', r.aggregateKeyX),
+          field('Forged signature R', r.forgedR),
+          field('Forged signature s', r.forgedS),
+          verdict(
+            r.verified ? 'alarm' : 'pass',
+            r.verified
+              ? `a full-width verifier accepted a signature on a message nobody authorised — ${r.sessions} sessions in, ${r.signaturesObtained} signatures out`
+              : 'the forgery was rejected',
+            r.verified ? 'Forged' : 'Attack failed',
+          ),
+          note(
+            'danger',
+            'Nothing was weakened to make this work. Unlike the search above, this is what the attack costs in reality: a few hundred milliseconds and enough patience to keep 256 signing sessions open at once.',
+          ),
+        );
+      } catch (err) {
+        rosOut.append(verdict('fail', `the attack did not complete — ${(err as Error).message}`, 'Error'));
+      } finally {
+        rosBtn.disabled = false;
+        rosStatus.textContent = '';
+      }
+    }, 0);
+  }
+
+  function runRosTwo(): void {
+    clear(rosTwoOut);
+    const r = attemptRosTwoNonce();
+    rosTwoOut.append(
+      h(
+        'div',
+        { class: 'wagner-stats' },
+        stat('Sessions', String(r.sessions)),
+        stat('Target moved', r.targetDrifted ? 'yes' : 'no'),
+      ),
+      bothSides(
+        'The target the system was solved against, and the target that actually applies once the offsets are published:',
+        { label: 'Targeted e*', value: r.targetedEStar },
+        { label: 'Actual e*', value: r.actualEStar },
+      ),
+      bothSides(
+        'And so the linear relation the forgery depends on no longer holds:',
+        { label: 'Σ ρ_i·e_i', value: r.sumRhoE },
+        { label: 'e* that the verifier will use', value: r.actualEStar },
+      ),
+      field('Resulting signature R', r.forgedR),
+      field('Resulting signature s', r.forgedS),
+      verdict(
+        r.verified ? 'alarm' : 'pass',
+        r.verified
+          ? 'the forgery was accepted, which must not happen under the two-nonce construction'
+          : 'the same verifier that accepted the full-width forgery rejects this one',
         r.verified ? 'Forged' : 'Attack failed',
       ),
       h('p', { class: 'help' }, r.explanation),
