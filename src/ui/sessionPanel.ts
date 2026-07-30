@@ -484,7 +484,10 @@ export function renderSessionPanel(root: HTMLElement): void {
           field('Q — the aggregate key', r.keyAgg.aggregateCompressed, {
             sub: `compressed; y is ${r.keyAgg.qHasEvenY ? 'even' : 'odd'}`,
           }),
-          field('Q as it is published', r.aggregateKeyX, { sub: '32 bytes, x-only — this is the whole group' }),
+          field('Q as it is published', r.aggregateKeyX, {
+            sub: '32 bytes, x-only — this is the whole group',
+            copy: true,
+          }),
           note(
             'info',
             'Every coefficient is a hash of ',
@@ -614,7 +617,10 @@ export function renderSessionPanel(root: HTMLElement): void {
             { label: 'Σ s_i mod n', value: r.aggregation.sum },
             { label: 's from the signature', value: r.aggregation.s },
           ),
-          field('R.x ‖ s — the finished signature', r.aggregation.signatureHex, { sub: '64 bytes' }),
+          field('R.x ‖ s — the finished signature', r.aggregation.signatureHex, {
+            sub: '64 bytes',
+            copy: true,
+          }),
         );
         break;
       default:

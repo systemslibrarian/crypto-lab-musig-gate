@@ -6,8 +6,91 @@
  * exhibits use. The same functions back the Vitest suite, so a green table and a
  * green CI run are the same claim.
  */
-import { clear, disclosure, h, labLink, note, panelIntro, verdict } from './dom.js';
+import { clear, code, disclosure, field, h, labLink, note, panelIntro, verdict } from './dom.js';
 import { KAT_GROUPS, type KatResult, katSummary, runAllVectors } from '../musig/vectors.js';
+
+/**
+ * Three cases pulled to the front.
+ *
+ * Fifty-odd green rows are evidence but not a lesson — nobody reads fifty rows, and
+ * the ones that matter most are invisible among the ones that are merely arithmetic.
+ * These three are the cases that change how you would *write* an implementation:
+ * one where rejecting is not enough because the report has to name a signer, one
+ * where the obvious shortcut (reduce mod n) silently destroys a security property,
+ * and one where the correct behaviour is to keep going through a value that has no
+ * x-coordinate at all.
+ *
+ * Identified by group + index rather than by comment text so a vector-file update
+ * that rewords a comment surfaces as a visible "case not found" rather than
+ * silently dropping the featured case.
+ */
+interface Featured {
+  group: string;
+  index: number;
+  title: string;
+  why: (string | HTMLElement)[];
+}
+
+const FEATURED: Featured[] = [
+  {
+    group: 'key_agg',
+    index: 4,
+    title: 'A public key that is not a point on the curve',
+    why: [
+      'Rejecting is the easy half. BIP-327 requires the failure to be an ',
+      code('invalid_contribution'),
+      ' report that names which signer supplied the bad bytes — index 1 here — because an n-of-n group that merely aborts learns nothing and can be stalled forever by an anonymous saboteur. Attribution is what turns a failed signing round into an accusation.',
+    ],
+  },
+  {
+    group: 'sig_agg',
+    index: 4,
+    title: 'A partial signature at or above the group order',
+    why: [
+      'The tempting shortcut is to reduce the scalar mod n and carry on, because the arithmetic still works and the aggregate signature still verifies. BIP-327 says reject — and report signer 1, again by index. Accepting both ',
+      code('s'),
+      ' and ',
+      code('s + n'),
+      ' would mean a partial signature is no longer a unique encoding of what a signer sent, so the identifiable-abort property above quietly stops holding: a signer could disown the bytes it contributed. Being helpful about malformed input is how that gets lost.',
+    ],
+  },
+  {
+    group: 'nonce_agg',
+    index: 1,
+    title: 'A nonce half that cancels to the point at infinity',
+    why: [
+      'Here the correct answer is not to reject. Sum the second halves of every signer’s nonce and you can land on the identity, which has no x-coordinate to serialize — and any signer moving last can force exactly that, which is the same last-mover power the nonce exhibit is about. BIP-327 says serialize it as 33 zero bytes and continue; the signature that comes out is still valid. An implementation that throws here hands every group a denial-of-service button, and one that special-cases it wrongly gets a different aggregate nonce than its co-signers.',
+    ],
+  },
+];
+
+/** The featured cases, in a form the renderer can show even when a lookup misses. */
+function featuredCases(results: KatResult[]): { spec: Featured; result?: KatResult }[] {
+  return FEATURED.map((spec) => ({
+    spec,
+    result: results.find((r) => r.group === spec.group && r.index === spec.index),
+  }));
+}
+
+/**
+ * Expected vs. produced. Through `field` so the hex cases follow the page's
+ * byte-display switch and the error-string cases print as the prose they are.
+ */
+function katFields(r: KatResult): HTMLElement[] {
+  return [
+    field('Expected', r.expected),
+    field('This implementation produced', r.actual),
+  ];
+}
+
+function passPill(pass: boolean): HTMLElement {
+  return h(
+    'span',
+    { class: `pill pill-${pass ? 'ok' : 'bad'}` },
+    h('span', { 'aria-hidden': 'true' }, pass ? '✓ ' : '✕ '),
+    pass ? 'pass' : 'FAIL',
+  );
+}
 
 export function renderVectorsPanel(root: HTMLElement): void {
   const output = h('div', { class: 'output' });
@@ -49,6 +132,42 @@ export function renderVectorsPanel(root: HTMLElement): void {
     ),
   );
 
+  output.append(
+    h(
+      'section',
+      { class: 'kat-featured', id: 'kat-featured' },
+      h('h3', {}, 'Three cases worth reading'),
+      h(
+        'p',
+        { class: 'help' },
+        `Every one of the ${summary.total} cases is in the tables below. These three are the ones that change how you would write an implementation — and two of them are places where the obvious behaviour is the wrong one.`,
+      ),
+      ...featuredCases(results).map(({ spec, result }) =>
+        h(
+          'article',
+          // A missing case is a failure, not a blank: the card stays, coloured bad.
+          { class: `kat-feature ${result?.pass ? 'kat-ok' : 'kat-bad'}` },
+          h('h4', {}, spec.title, passPill(result?.pass ?? false)),
+          result
+            ? h(
+                'p',
+                { class: 'kat-feature-case' },
+                h('span', { class: 'kat-kind' }, result.kind === 'accept' ? 'MUST ACCEPT' : 'MUST REJECT'),
+                ' ',
+                h('span', {}, result.what),
+              )
+            : h(
+                'p',
+                { class: 'kat-feature-case' },
+                `case ${spec.group} #${spec.index} was not found in the vector run — the vector files may have changed`,
+              ),
+          h('p', { class: 'kat-why' }, ...spec.why),
+          ...(result ? katFields(result) : []),
+        ),
+      ),
+    ),
+  );
+
   for (const group of KAT_GROUPS) {
     const rows = results.filter((r) => r.group === group.id);
     const failed = rows.filter((r) => !r.pass).length;
@@ -79,31 +198,11 @@ export function renderVectorsPanel(root: HTMLElement): void {
               h(
                 'summary',
                 {},
-                h(
-                  'span',
-                  { class: `pill pill-${r.pass ? 'ok' : 'bad'}` },
-                  h('span', { 'aria-hidden': 'true' }, r.pass ? '✓ ' : '✕ '),
-                  r.pass ? 'pass' : 'FAIL',
-                ),
+                passPill(r.pass),
                 h('span', { class: 'kat-kind' }, r.kind === 'accept' ? 'must accept' : 'must reject'),
                 h('span', { class: 'kat-case' }, r.what),
               ),
-              h(
-                'div',
-                { class: 'kat-body' },
-                h(
-                  'div',
-                  { class: 'field' },
-                  h('span', { class: 'field-label' }, 'Expected'),
-                  h('code', { class: 'field-value' }, r.expected),
-                ),
-                h(
-                  'div',
-                  { class: 'field' },
-                  h('span', { class: 'field-label' }, 'This implementation produced'),
-                  h('code', { class: 'field-value' }, r.actual),
-                ),
-              ),
+              h('div', { class: 'kat-body' }, ...katFields(r)),
             ),
           ),
         ),

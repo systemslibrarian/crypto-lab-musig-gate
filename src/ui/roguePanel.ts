@@ -13,6 +13,7 @@ import {
   code,
   field,
   h,
+  hexValue,
   labLink,
   learnerCheck,
   note,
@@ -20,7 +21,6 @@ import {
   prediction,
   predictionDebrief,
   scrollRegion,
-  short,
   textControl,
   verdict,
 } from './dom.js';
@@ -273,9 +273,9 @@ export function renderRoguePanel(root: HTMLElement): void {
             'tr',
             {},
             h('td', {}, String(round.round)),
-            h('td', {}, h('code', {}, short(round.candidate, 8))),
-            h('td', {}, h('code', {}, short(hex32(round.actualCoeff), 8))),
-            h('td', {}, h('code', {}, short(round.actualAggregateX, 8))),
+            h('td', {}, hexValue(round.candidate, { keep: 8 })),
+            h('td', {}, hexValue(hex32(round.actualCoeff), { keep: 8 })),
+            h('td', {}, hexValue(round.actualAggregateX, { keep: 8 })),
             h(
               'td',
               {},
@@ -372,7 +372,10 @@ export function renderRoguePanel(root: HTMLElement): void {
       ...r.honestPubkeys.map((pk, i) => field(`Honest signer ${i + 1} key`, pk)),
       field('Rogue key published last', r.roguePubkey),
       field('Resulting aggregate key', r.aggregateKeyX),
-      field('Signature the attacker produced alone', r.forgedSignature, { sub: '64 bytes' }),
+      field('Signature the attacker produced alone', r.forgedSignature, {
+        sub: '64 bytes',
+        copy: true,
+      }),
     ];
   }
 }

@@ -14,12 +14,12 @@ import {
   disclosure,
   field,
   h,
+  hexValue,
   labLink,
   learnerCheck,
   note,
   panelIntro,
   scrollRegion,
-  short,
   verdict,
 } from './dom.js';
 import {
@@ -268,8 +268,8 @@ export function renderKeyAggPanel(root: HTMLElement): void {
             'tr',
             {},
             h('td', {}, String(row.index + 1)),
-            h('td', {}, h('code', {}, short(row.pubkey, 10))),
-            h('td', {}, h('code', {}, short(hex32(row.coeff), 10))),
+            h('td', {}, hexValue(row.pubkey, { keep: 10 })),
+            h('td', {}, hexValue(hex32(row.coeff), { keep: 10 })),
             h(
               'td',
               {},

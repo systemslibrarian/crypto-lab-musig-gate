@@ -446,6 +446,88 @@ test.describe('the BIP-327 vectors', () => {
     await expect(first).toContainText('Expected');
     await expect(first).toContainText('This implementation produced');
   });
+
+  test('three cases are pulled to the front, and they are the ones claimed', async ({ page }) => {
+    await page.goto('.');
+    await page.locator('#tab-vectors').click();
+    const featured = page.locator('#kat-featured');
+    // Looked up by group + index in the source, so a vector-file reword shows here
+    // as a missing case rather than silently dropping one.
+    await expect(featured.locator('.kat-feature')).toHaveCount(3);
+    await expect(featured).not.toContainText('was not found in the vector run');
+    await expect(featured.locator('.pill-bad')).toHaveCount(0);
+    // Two rejections that must name the signer, and one that must NOT reject at all.
+    await expect(featured).toContainText('invalid_contribution(signer=1, contrib=pubkey)');
+    await expect(featured).toContainText('invalid_contribution(signer=1, contrib=psig)');
+    await expect(featured.locator('.kat-feature').nth(2)).toContainText('MUST ACCEPT');
+    // It sits above the full catalogue rather than replacing it.
+    await expect(page.locator('#panel-vectors .kat-item')).toHaveCount(56);
+  });
+});
+
+test.describe('the byte-display switch', () => {
+  test('hex is abbreviated by default and one control expands all of it', async ({ page }) => {
+    const errors = noPageErrors(page);
+    await page.goto('.');
+    await btn(page, '#panel-session', 'Show all steps').click();
+
+    const abbreviated = page.getByRole('button', { name: 'Abbreviated' });
+    const full = page.getByRole('button', { name: 'Full bytes' });
+    await expect(abbreviated).toHaveAttribute('aria-pressed', 'true');
+    await expect(full).toHaveAttribute('aria-pressed', 'false');
+
+    const values = page.locator('[data-hex-full]');
+    expect(await values.count()).toBeGreaterThan(20);
+
+    // Abbreviated: every value is shorter than the bytes it stands for, and the full
+    // value is still in the DOM — nothing is thrown away, only elided.
+    const shortened = async () =>
+      values.evaluateAll(
+        (els) => els.filter((e) => e.textContent !== e.getAttribute('data-hex-full')).length,
+      );
+    expect(await shortened()).toBe(await values.count());
+
+    await full.click();
+    await expect(full).toHaveAttribute('aria-pressed', 'true');
+    await expect(abbreviated).toHaveAttribute('aria-pressed', 'false');
+    expect(await shortened()).toBe(0);
+
+    await abbreviated.click();
+    expect(await shortened()).toBe(await values.count());
+    expect(errors).toEqual([]);
+  });
+
+  test('the choice survives a reload, and later panels honour it', async ({ page }) => {
+    await page.goto('.');
+    await page.getByRole('button', { name: 'Full bytes' }).click();
+    await page.reload();
+    await expect(page.getByRole('button', { name: 'Full bytes' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    // A panel first rendered *after* the switch must come up full, which is the part a
+    // subscribe-on-render implementation gets wrong.
+    await page.locator('#tab-rogue').click();
+    await btn(page, '#panel-rogue', 'Run the rogue-key attack').click();
+    await expect(page.locator('#panel-rogue .attack-broken .verdict-alarm')).toContainText('Forged');
+    const values = page.locator('#panel-rogue [data-hex-full]');
+    expect(await values.count()).toBeGreaterThan(0);
+    expect(
+      await values.evaluateAll(
+        (els) => els.filter((e) => e.textContent !== e.getAttribute('data-hex-full')).length,
+      ),
+    ).toBe(0);
+  });
+
+  test('copy controls sit on the values a learner takes elsewhere', async ({ page }) => {
+    await page.goto('.');
+    await btn(page, '#panel-session', 'Show all steps').click();
+    // The aggregate key and the finished signature — the two things you would paste
+    // into another tool. Not on every intermediate value.
+    const copies = page.locator('#panel-session .copy-btn');
+    await expect(copies).toHaveCount(2);
+    await expect(copies.first()).toHaveAccessibleName(/^Copy /);
+  });
 });
 
 test.describe('the guided tour', () => {

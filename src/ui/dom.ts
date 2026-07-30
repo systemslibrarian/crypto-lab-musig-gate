@@ -33,12 +33,133 @@ export function clear(node: HTMLElement): void {
   node.replaceChildren();
 }
 
-/** A labelled read-only value shown as wrapping monospace (no scroll region needed). */
+// ------------------------------------------------------------- byte display
+//
+// Every intermediate value stays available — that is the point of the lab — but a
+// page that opens with forty lines of full-width hex is harder to read than the
+// ideas it teaches require. So hex is abbreviated by default and ONE control
+// switches the whole page to full bytes: an expert flips it once rather than
+// expanding values one at a time, and nothing is ever actually hidden.
+//
+// The switch repaints by walking the DOM for `data-hex-full` rather than by keeping
+// a list of subscribers. Panels are re-rendered wholesale and often — every attack
+// run rebuilds its output — so a registry of closures over nodes would retain
+// detached DOM until something happened to prune it. A query on click cannot go
+// stale, and values created *after* a switch read the mode at paint time, so a
+// panel rendered while "Full bytes" is on comes up full.
+
+type ByteMode = 'short' | 'full';
+
+const FULL_ATTR = 'data-hex-full';
+const KEEP_ATTR = 'data-hex-keep';
+const BYTE_MODE_KEY = 'musig-gate-bytes';
+
+/** Survives a reload, dies with the tab — same bargain as the tour's progress. */
+function loadByteMode(): ByteMode {
+  try {
+    return sessionStorage.getItem(BYTE_MODE_KEY) === 'full' ? 'full' : 'short';
+  } catch {
+    return 'short';
+  }
+}
+
+let byteMode: ByteMode = loadByteMode();
+
+function paintHex(el: HTMLElement): void {
+  const full = el.getAttribute(FULL_ATTR) ?? '';
+  const keep = Number(el.getAttribute(KEEP_ATTR)) || 12;
+  el.textContent = byteMode === 'short' ? short(full, keep) : full;
+}
+
+function setByteMode(mode: ByteMode): void {
+  if (mode === byteMode) return;
+  byteMode = mode;
+  try {
+    sessionStorage.setItem(BYTE_MODE_KEY, mode);
+  } catch {
+    // Private-mode storage refusal is not a reason to ignore the click.
+  }
+  for (const el of document.querySelectorAll<HTMLElement>(`[${FULL_ATTR}]`)) paintHex(el);
+}
+
+/** Long, all-hex values are the ones worth abbreviating; prose and short ids are not. */
+function isLongHex(value: string): boolean {
+  return value.length >= 48 && /^[0-9a-fA-F]+$/.test(value);
+}
+
+/**
+ * A monospace hex value that follows the global byte-display mode.
+ *
+ * `keep` is per-value because the useful abbreviation differs by context: a table
+ * cell competing with five others can afford far less than a standalone field.
+ */
+export function hexValue(
+  value: string,
+  opts: { keep?: number; class?: string } = {},
+): HTMLElement {
+  const el = h('code', { class: opts.class });
+  el.setAttribute(FULL_ATTR, value);
+  el.setAttribute(KEEP_ATTR, String(opts.keep ?? 12));
+  // Hover reaches the full value without touching the global mode. Deliberately no
+  // aria-label: ARIA prohibits naming a `code` element, and hearing 64 hex
+  // characters read aloud is worse than hearing the abbreviation — a screen-reader
+  // user who wants the bytes uses the same switch everyone else does.
+  el.title = value;
+  paintHex(el);
+  return el;
+}
+
+/** The abbreviated/full switch. Rendered once, beside the exhibit tabs. */
+export function byteModeControl(): HTMLElement {
+  const make = (mode: ByteMode, label: string): HTMLButtonElement => {
+    const btn = h(
+      'button',
+      {
+        type: 'button',
+        class: 'btn seg-btn',
+        'aria-pressed': String(byteMode === mode),
+        onclick: () => {
+          setByteMode(mode);
+          for (const b of buttons) b.setAttribute('aria-pressed', String(b === btn));
+        },
+      },
+      label,
+    ) as HTMLButtonElement;
+    return btn;
+  };
+  const buttons = [make('short', 'Abbreviated'), make('full', 'Full bytes')];
+  return h(
+    'div',
+    { class: 'byte-mode' },
+    h('span', { class: 'byte-mode-label', id: 'byte-mode-label' }, 'Hex values'),
+    h('div', { class: 'seg', role: 'group', 'aria-labelledby': 'byte-mode-label' }, ...buttons),
+  );
+}
+
+/**
+ * A labelled read-only value shown as wrapping monospace (no scroll region needed).
+ *
+ * Long hex follows the global byte-display mode; prose and short identifiers are
+ * printed as given, because abbreviating a 2-byte prefix helps nobody.
+ */
 export function field(
   label: string,
   value: string,
-  opts: { mono?: boolean; sub?: string } = {},
+  opts: { mono?: boolean; sub?: string; copy?: boolean } = {},
 ): HTMLElement {
+  const mono = opts.mono !== false;
+  const code =
+    mono && isLongHex(value)
+      ? hexValue(value, { class: 'field-value' })
+      : h('code', { class: mono ? 'field-value' : 'field-value plain' }, value);
+  const body = opts.copy
+    ? h(
+        'div',
+        { class: 'value-with-copy' },
+        code,
+        copyButton(() => value, { label: `Copy ${label}` }),
+      )
+    : code;
   return h(
     'div',
     { class: 'field' },
@@ -48,8 +169,36 @@ export function field(
       label,
       opts.sub ? h('span', { class: 'field-sub' }, ` ${opts.sub}`) : null,
     ),
-    h('code', { class: opts.mono === false ? 'field-value plain' : 'field-value' }, value),
+    body,
   );
+}
+
+/**
+ * Copy-to-clipboard, offered only where a learner is plausibly going to compare a
+ * value against something outside the page.
+ */
+export function copyButton(
+  getText: () => string,
+  opts: { label?: string } = {},
+): HTMLButtonElement {
+  const base = 'Copy';
+  const btn = h(
+    'button',
+    { type: 'button', class: 'btn btn-ghost copy-btn', 'aria-label': opts.label ?? base },
+    base,
+  ) as HTMLButtonElement;
+  btn.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(getText());
+      btn.textContent = 'Copied';
+    } catch {
+      btn.textContent = 'Copy failed';
+    }
+    setTimeout(() => {
+      btn.textContent = base;
+    }, 1200);
+  });
+  return btn;
 }
 
 /**

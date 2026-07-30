@@ -12,8 +12,9 @@ const TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'];
  * final step, answers the blind lone-signer challenge both ways, fires every attack
  * — rogue-key, nonce steering, Wagner and ROS — in both its broken and fixed mode, runs the hand-supplied rogue-key path
  * (including its malformed-input rejection), trips the tamper and drop-a-signer
- * failure paths, and opens every disclosure, glossary and learner check so the
- * feedback live regions are populated too.
+ * failure paths, flips the byte-display switch to full width, and opens every
+ * disclosure, glossary and learner check so the feedback live regions are populated
+ * too.
  */
 async function driveDemos(page: Page): Promise<void> {
   const click = async (selector: string, nth = 0): Promise<void> => {
@@ -140,6 +141,11 @@ async function driveDemos(page: Page): Promise<void> {
   await click('#tab-vectors');
   await page.locator('#panel-vectors').waitFor({ timeout: 15_000 });
   await page.waitForTimeout(300);
+
+  // Full bytes: the wider, harder layout for every hex value on the page, and the
+  // other pressed state of the byte-display switch. Flipped here rather than at the
+  // start so the scan sees full-width values in every exhibit at once.
+  await clickByText(page, '.byte-mode', 'Full bytes');
 
   // Reveal every panel and open every disclosure so all states are in the DOM.
   await page.evaluate(() => {

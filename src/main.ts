@@ -1,5 +1,5 @@
 import './style.css';
-import { resetPredictions } from './ui/dom.js';
+import { byteModeControl, resetPredictions } from './ui/dom.js';
 import { type PanelKey, mountTour } from './ui/tour.js';
 import { renderSessionPanel } from './ui/sessionPanel.js';
 import { renderKeyAggPanel } from './ui/keyaggPanel.js';
@@ -59,6 +59,10 @@ function wireTabs(): void {
 }
 
 wireTabs();
+
+/** One global control for hex verbosity, so nothing has to be expanded one at a time. */
+const byteHost = document.getElementById('byte-mode-host');
+if (byteHost) byteHost.append(byteModeControl());
 
 /**
  * The guided tour sits above the tabs and drives them. It is mounted before the
