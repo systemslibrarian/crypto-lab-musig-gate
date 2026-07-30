@@ -69,6 +69,14 @@ body {
   line-height: 1.55;
 }
 
+/* The `hidden` attribute hides via the UA stylesheet's `display:none`, which ANY
+   author `display` rule silently defeats — as .tour-bar's `display:grid` did. Make
+   the attribute authoritative so hiding something never depends on it having no
+   layout rules of its own. */
+#app [hidden] {
+  display: none !important;
+}
+
 #app {
   max-width: 1000px;
   margin: 0 auto;
@@ -112,6 +120,182 @@ body {
 .cl-hero-sub { color: var(--accent-text); opacity: 1; }
 .cl-hero-why-label { color: var(--accent-text); }
 .cl-hero-desc code { background: var(--surface-2); padding: 0.05em 0.35em; border-radius: 5px; }
+
+/* ---------- guided tour ---------- */
+.tour-invite {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--accent-tint);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  padding: 1rem 1.15rem;
+  margin: 0 0 1.25rem;
+}
+.tour-invite-main { flex: 1 1 22rem; }
+.tour-invite-title { margin: 0; font-size: 1.15rem; }
+.tour-invite-promise { margin: 0.35rem 0 0; color: var(--text-dim); font-size: 0.95rem; max-width: 60ch; }
+.tour-invite-actions { display: grid; gap: 0.35rem; justify-items: start; }
+.tour-start-btn { font-size: 0.95rem; padding: 0.6rem 1.1rem; }
+
+.tour-bar {
+  position: sticky;
+  top: 3.6rem; /* clears the shared top bar */
+  z-index: 5;
+  display: grid;
+  gap: 0.5rem;
+  background: var(--surface);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  padding: 0.8rem 1rem;
+  margin: 0 0 1.25rem;
+}
+.tour-head { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: center; }
+.tour-tag {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: var(--accent-text);
+}
+.tour-label { font-weight: 700; font-size: 0.98rem; }
+.tour-actions { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-left: auto; }
+.tour-blurb { margin: 0; color: var(--text-dim); font-size: 0.92rem; max-width: 78ch; }
+.tour-dots { display: flex; gap: 0.3rem; }
+.tour-dot {
+  width: 1.4rem;
+  height: 0.28rem;
+  border-radius: 999px;
+  background: var(--border);
+}
+.tour-dot-done { background: var(--accent-text); }
+.tour-dot-now { background: var(--accent); box-shadow: 0 0 0 2px var(--accent-tint); }
+
+/* A one-shot cue that the tour moved you somewhere — motion tied to an action. */
+.tour-flash { animation: tourflash 1.4s ease; border-radius: var(--radius); }
+@keyframes tourflash {
+  0% { box-shadow: 0 0 0 3px var(--accent); }
+  100% { box-shadow: 0 0 0 3px transparent; }
+}
+
+/* ---------- predictions ---------- */
+.predict {
+  display: grid;
+  gap: 0.5rem;
+  background: var(--accent-tint);
+  border: 1px solid var(--accent);
+  border-left-width: 3px;
+  border-radius: var(--radius);
+  padding: 0.85rem 1rem;
+  margin: 1rem 0;
+}
+.predict-tag {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: var(--accent-text);
+}
+.predict-q { margin: 0; font-size: 0.97rem; font-weight: 600; max-width: 72ch; }
+.predict-opts { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.predict-opt { font-size: 0.85rem; }
+.predict-chosen { border-color: var(--accent); background: var(--surface); font-weight: 700; }
+.predict-status { display: grid; gap: 0.25rem; }
+.predict-debrief {
+  display: grid;
+  gap: 0.3rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 8px;
+  padding: 0.7rem 0.9rem;
+  margin: 0.8rem 0;
+}
+
+/* ---------- bridges between exhibits ---------- */
+.bridge {
+  display: grid;
+  gap: 0.3rem;
+  border-left: 3px solid var(--accent-text);
+  background: var(--surface-2);
+  border-radius: 0 8px 8px 0;
+  padding: 0.7rem 0.9rem;
+  margin: 1rem 0;
+}
+.bridge-line { margin: 0; font-size: 0.9rem; color: var(--text); }
+.bridge-label { font-weight: 700; color: var(--accent-text); }
+.bridge-btn { justify-self: start; margin-top: 0.3rem; }
+
+/* ---------- advanced disclosure ---------- */
+.advanced-block { margin: 1.25rem 0; border-color: var(--accent); }
+.advanced-block > summary { font-size: 0.98rem; color: var(--accent-text); }
+.advanced-sections { display: grid; gap: 0.5rem; }
+
+/* ---------- exit check / transfer task ---------- */
+.transfer {
+  display: grid;
+  gap: 0.9rem;
+  background: var(--surface);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  padding: 1.1rem;
+  margin: 1.75rem 0 0;
+}
+.transfer h2 { margin: 0; font-size: 1.2rem; }
+.transfer h3 { margin: 0.4rem 0 0; font-size: 1rem; }
+.exit-q {
+  display: grid;
+  gap: 0.5rem;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.8rem 0.9rem;
+}
+.match-task { display: grid; gap: 0.6rem; }
+.match-row { display: grid; gap: 0.3rem; }
+.match-threat { font-size: 0.9rem; font-weight: 600; }
+/* Specificity, not source order: `.mono-input` sets the `background` SHORTHAND
+   further down this file, which would erase the chevron image if this rule were a
+   single class. A styled select without a visible chevron is an a11y-gate failure. */
+.mono-input.styled-select {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 2rem;
+  background-image: linear-gradient(45deg, transparent 50%, var(--accent-text) 50%),
+    linear-gradient(135deg, var(--accent-text) 50%, transparent 50%);
+  background-position: calc(100% - 1.05rem) 55%, calc(100% - 0.7rem) 55%;
+  background-size: 0.35rem 0.35rem, 0.35rem 0.35rem;
+  background-repeat: no-repeat;
+}
+/* Same specificity trap as the chevron: `.mono-input`'s border rule is later in the
+   file, so a single-class selector here would never win. */
+.mono-input.match-ok { border-color: var(--ok); border-width: 2px; }
+.mono-input.match-bad { border-color: var(--bad); border-width: 2px; }
+
+/* ---------- causal emphasis ---------- */
+.collapse-op { display: block; font-size: 0.66rem; color: var(--text-dim); line-height: 1.2; }
+.dep-chain {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: center;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.6rem 0.75rem;
+}
+.dep-node {
+  font-family: var(--mono);
+  font-size: 0.76rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.25rem 0.5rem;
+}
+.dep-node-key { border-color: var(--accent); color: var(--accent-text); font-weight: 700; }
+.dep-arrow { color: var(--accent-text); font-weight: 700; }
+.loop-list { margin: 0.3rem 0; padding-left: 1.3rem; display: grid; gap: 0.25rem; font-size: 0.9rem; }
+.cell-moving { background: color-mix(in oklab, var(--accent) 10%, transparent); }
 
 /* ---------- tabs ---------- */
 .tabs { margin: 0.5rem 0 1.25rem; }
@@ -585,12 +769,18 @@ input[type="checkbox"] { accent-color: var(--accent); width: 1.05rem; height: 1.
   to { opacity: 1; transform: none; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .reveal { animation: none; }
+  .reveal, .tour-flash { animation: none; }
   * { transition: none !important; }
+  html { scroll-behavior: auto; }
 }
 
 /* Touch targets: primary and icon controls get a >=44px hit area on coarse
    pointers (phones/tablets), where precise tapping is harder. */
 @media (pointer: coarse) {
-  #app .btn, #app .tab-btn, #app .check-opt { min-height: 44px; }
+  #app .btn, #app .tab-btn, #app .check-opt, #app .predict-opt { min-height: 44px; }
+}
+
+@media (max-width: 640px) {
+  .tour-actions { margin-left: 0; }
+  .tour-bar { position: static; }
 }

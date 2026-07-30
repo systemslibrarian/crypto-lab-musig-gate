@@ -8,6 +8,7 @@
  */
 import {
   bothSides,
+  bridge,
   clear,
   code,
   disclosure,
@@ -345,6 +346,10 @@ export function renderKeyAggPanel(root: HTMLElement): void {
           { label: 'The protocol requires a signature over the key list', correct: false },
         ],
         'Their coefficient is a hash of L ‖ P_rogue, and L hashes P_rogue too — so the key they need depends on the coefficient, which depends on the key. It is a hash fixed point, not an algebra problem. Their key would NOT be rejected: a rogue key is a perfectly valid curve point, which is precisely why the defence has to be algebraic rather than a validity check. Try it in the Rogue Key exhibit.',
+      ),
+      bridge(
+        'Q = Σ a_i·P_i is not an arbitrary complication — you have just checked it holds byte for byte, and seen it land somewhere completely different from the naive sum.',
+        'What does that difference actually buy? Let a malicious signer choose their key last and find out.',
       ),
       note(
         'caveat',

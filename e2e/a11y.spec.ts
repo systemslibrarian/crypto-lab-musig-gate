@@ -24,9 +24,21 @@ async function driveDemos(page: Page): Promise<void> {
       .catch(() => {});
   };
 
+  // --- The guided tour: its bar, progress and cross-tab jumps are real UI ----
+  await clickByText(page, '#tour-invite', 'Start the guided tour');
+  await page.waitForTimeout(120);
+  await clickByText(page, '#tour-bar', 'Continue');
+  await clickByText(page, '#tour-bar', 'Continue');
+  await clickByText(page, '#tour-bar', 'Exit tour');
+  await page.waitForTimeout(120);
+
   // --- Exhibit 1: the signing session, stepped to the end and then broken ----
   await click('#tab-session');
   await page.locator('#panel-session').waitFor({ timeout: 10_000 });
+  // The indistinguishability prediction sits before the stepper.
+  for (const el of await page.locator('#panel-session .predict-opt').all()) {
+    await el.click({ timeout: 1500 }).catch(() => {});
+  }
   // Step forward a few times so intermediate step cards get scanned, then reveal all.
   for (let i = 0; i < 3; i++) await clickByText(page, '#panel-session', 'Next step');
   await clickByText(page, '#panel-session', 'Show all steps');
@@ -45,6 +57,19 @@ async function driveDemos(page: Page): Promise<void> {
   await clickByText(page, '#panel-session', 'Try signing with one signer missing');
   await page.waitForTimeout(150);
 
+  // The exit check: both scenario questions and the matching task, including its
+  // wrong-answer styling, which is a colour-bearing state the gate must see.
+  for (const el of await page.locator('#tour-transfer .check-opt').all()) {
+    await el.click({ timeout: 1500 }).catch(() => {});
+  }
+  const selects = await page.locator('#tour-transfer .match-task select').all();
+  for (let i = 0; i < selects.length; i++) {
+    // Deliberately misalign one row so both match-ok and match-bad are rendered.
+    await selects[i].selectOption({ index: i === 0 ? 2 : i + 1 }).catch(() => {});
+  }
+  await clickByText(page, '#tour-transfer', 'Check my answers');
+  await page.waitForTimeout(150);
+
   // --- Exhibit 2: key aggregation ------------------------------------------
   await click('#tab-keyagg');
   await page.locator('#panel-keyagg').waitFor({ timeout: 10_000 });
@@ -57,6 +82,9 @@ async function driveDemos(page: Page): Promise<void> {
   await clickByText(page, '#panel-keyagg', 'New points on the small curve');
   await clickByText(page, '#panel-keyagg', 'Toggle the naive');
   await clickByText(page, '#panel-keyagg', 'Toggle the naive');
+  for (const el of await page.locator('#panel-rogue .predict-opt').all()) {
+    await el.click({ timeout: 1500 }).catch(() => {});
+  }
   await page.waitForTimeout(150);
 
   // --- Exhibit 3: the rogue-key attack, both modes + the manual path --------
@@ -75,19 +103,27 @@ async function driveDemos(page: Page): Promise<void> {
   // --- Exhibit 4: why two nonces -------------------------------------------
   await click('#tab-nonce');
   await page.locator('#panel-nonce').waitFor({ timeout: 10_000 });
+  // Answer both predictions so their recorded state and their debriefs get scanned.
+  for (const el of await page.locator('#panel-nonce .predict-opt').all()) {
+    await el.click({ timeout: 1200 }).catch(() => {});
+  }
   await clickByText(page, '#panel-nonce', 'Steer the aggregate nonce');
   await clickByText(page, '#panel-nonce', 'Try the same trick against two nonces');
   await clickByText(page, '#panel-nonce', 'New target nonce');
   await clickByText(page, '#panel-nonce', 'Steer the aggregate nonce');
   await clickByText(page, '#panel-nonce', 'Try the same trick against two nonces');
-  // The Wagner forgery: a narrow width keeps the scan fast, and the select itself
-  // needs exercising since a styled <select> is its own a11y hazard.
+
+  // The two forgeries are advanced material behind a disclosure. It MUST be opened
+  // before driving them: otherwise every click below waits out its timeout against a
+  // hidden button, the scan never reaches those states, and the whole spec times out.
+  await page.locator('#tour-advanced > summary').click({ timeout: 3000 }).catch(() => {});
+  // A narrow width keeps the scan fast, and the styled <select> is its own hazard.
   await page.locator('#wagner-bits').selectOption('21').catch(() => {});
   await clickByText(page, '#panel-nonce', 'Forge a signature nobody authorised');
   await page
     .locator('#panel-nonce .wagner-section .verdict')
     .first()
-    .waitFor({ timeout: 60_000 })
+    .waitFor({ timeout: 30_000 })
     .catch(() => {});
   await clickByText(page, '#panel-nonce', 'Try to fix a target under two nonces');
   // The full-width ROS forgery and its two-nonce counterpart.
@@ -95,7 +131,7 @@ async function driveDemos(page: Page): Promise<void> {
   await page
     .locator('#panel-nonce .ros-section .verdict')
     .first()
-    .waitFor({ timeout: 60_000 })
+    .waitFor({ timeout: 30_000 })
     .catch(() => {});
   await clickByText(page, '#panel-nonce', 'Run ROS against two nonces');
   await page.waitForTimeout(150);
@@ -121,11 +157,18 @@ async function driveDemos(page: Page): Promise<void> {
   await page.waitForTimeout(250);
 }
 
-/** Click the first button inside `scope` whose visible text starts with `label`. */
+/**
+ * Click the first button inside `scope` whose visible text starts with `label`.
+ *
+ * Visibility is checked first so a button that is absent or collapsed costs
+ * milliseconds rather than a full click timeout. With this many exploratory clicks
+ * the difference is the whole spec's runtime budget.
+ */
 async function clickByText(page: Page, scope: string, label: string): Promise<void> {
   const btn = page.locator(`${scope} button`, { hasText: label }).first();
-  await btn.click({ timeout: 3000 }).catch(() => {});
-  await page.waitForTimeout(60);
+  if (!(await btn.isVisible().catch(() => false))) return;
+  await btn.click({ timeout: 2000 }).catch(() => {});
+  await page.waitForTimeout(50);
 }
 
 async function scan(page: Page): Promise<void> {

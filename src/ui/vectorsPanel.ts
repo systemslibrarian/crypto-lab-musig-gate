@@ -41,6 +41,14 @@ export function renderVectorsPanel(root: HTMLElement): void {
     ),
   );
 
+  output.append(
+    h(
+      'p',
+      { class: 'help' },
+      'This tab is implementation evidence, not a sixth lesson. It establishes conformance to BIP-327 on the specification’s own inputs — which is a strong claim about the protocol logic, and says nothing about timing side channels, nonce storage, or whether the system around this code is safe.',
+    ),
+  );
+
   for (const group of KAT_GROUPS) {
     const rows = results.filter((r) => r.group === group.id);
     const failed = rows.filter((r) => !r.pass).length;

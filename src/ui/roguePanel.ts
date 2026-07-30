@@ -8,6 +8,7 @@
  * attacker's fixed-point search is shown failing round by round.
  */
 import {
+  bridge,
   clear,
   code,
   field,
@@ -16,6 +17,8 @@ import {
   learnerCheck,
   note,
   panelIntro,
+  prediction,
+  predictionDebrief,
   scrollRegion,
   short,
   textControl,
@@ -94,9 +97,21 @@ export function renderRoguePanel(root: HTMLElement): void {
       ),
     ),
 
+    h('div', { id: 'tour-rogue-predict' }),
+    prediction(
+      'rogue-rule',
+      'Two honest signers publish P_1 and P_2. An attacker publishes its key last, after seeing theirs. Which aggregation rule can it manipulate into a key that it alone controls?',
+      [
+        { label: 'Q = P_1 + P_2 + P_attacker', correct: true },
+        { label: 'Q = a_1·P_1 + a_2·P_2 + a_3·P_attacker', correct: false },
+        { label: 'Both rules', correct: false },
+        { label: 'Neither — the keys are validated', correct: false },
+      ],
+    ),
+
     h(
       'section',
-      { class: 'attack-block attack-broken' },
+      { class: 'attack-block attack-broken', id: 'tour-rogue-naive' },
       h('h3', {}, h('span', { class: 'pill pill-bad' }, 'BROKEN'), ' Naive aggregation: Q = ΣP_i'),
       h(
         'p',
@@ -121,7 +136,7 @@ export function renderRoguePanel(root: HTMLElement): void {
 
     h(
       'section',
-      { class: 'attack-block attack-fixed' },
+      { class: 'attack-block attack-fixed', id: 'tour-rogue-fixed' },
       h('h3', {}, h('span', { class: 'pill pill-ok' }, 'BIP-327'), ' Aggregation with coefficients: Q = Σ a_i·P_i'),
       h(
         'p',
@@ -173,6 +188,11 @@ export function renderRoguePanel(root: HTMLElement): void {
       manualOut,
     ),
 
+    predictionDebrief(
+      'rogue-rule',
+      'Only the plain sum is manipulable. Q = ΣP_i is linear in the keys, so the attacker sets P_attacker = t·G − (P_1 + P_2) and owns the total. Under BIP-327 its coefficient is a hash of the very key it is solving for, so the same move requires a hash fixed point. And note what is NOT the answer: the rogue key is a perfectly well-formed curve point, so no amount of validation catches it — the defence has to be algebraic.',
+    ),
+
     learnerCheck(
       'The naive attack succeeded and the verifier said "valid". Whose fault is that?',
       [
@@ -181,6 +201,11 @@ export function renderRoguePanel(root: HTMLElement): void {
         { label: 'The honest signers, for publishing their keys first', correct: false },
       ],
       'The signature is genuinely valid under the group key, so no verifier could reject it without breaking Schnorr. The flaw is upstream, in how the group key was formed. This is why a successful forgery here is coloured as an alarm rather than a success: the primitive did its job, and the protocol around it did not.',
+    ),
+
+    bridge(
+      'Key setup can be attacked, and hash-derived coefficients are what close it. A well-formed public key is not a safe public key.',
+      'Signing does not only aggregate keys — every signature also aggregates fresh nonces. Can those be steered the same way?',
     ),
 
     note(

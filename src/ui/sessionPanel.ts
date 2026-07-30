@@ -11,19 +11,24 @@ import {
   bothSides,
   clear,
   code,
+  bridge,
   disclosure,
+  exitQuestion,
   field,
   glossary,
   h,
   labLink,
-  learnerCheck,
+  matchingTask,
   note,
   panelIntro,
+  prediction,
+  predictionDebrief,
   scrollRegion,
   short,
   textControl,
   verdict,
 } from './dom.js';
+import { registerTourAction } from './tour.js';
 import {
   type SessionResult,
   type Signer,
@@ -246,10 +251,29 @@ export function renderSessionPanel(root: HTMLElement): void {
           'Key aggregation is order-dependent. Sorting is how signers derive the same aggregate key from an unordered set — untick it and watch Q change.',
         ),
       ),
-      h('div', { class: 'action-row' }, nextBtn, allBtn, resetBtn, rekeyBtn, progress),
+      h('div', { class: 'action-row', id: 'tour-run' }, nextBtn, allBtn, resetBtn, rekeyBtn, progress),
     ),
+    // Asked here, before the stepper output, so it is a genuine prediction rather
+    // than a comprehension check on something already on screen.
+    h('div', { id: 'tour-predict-indist' }),
+    prediction(
+      'indistinguishable',
+      'Before you run anything: a verifier is handed the finished 64-byte signature and the 32-byte aggregate key, and nothing else. Can it tell how many people signed?',
+      [
+        { label: 'No — the output looks identical either way', correct: true },
+        { label: 'Yes, from the signature length', correct: false },
+        { label: 'Yes, from the aggregate key', correct: false },
+        { label: 'Only if it knows the key list in advance', correct: false },
+      ],
+    ),
+    h('div', { id: 'tour-steps' }),
     output,
+    transferSection(),
   );
+
+  // The blind challenge only exists once every step is revealed, so the tour has to
+  // be able to get the panel there itself.
+  registerTourAction('session:showAll', () => goto(STEPS.length));
 
   /**
    * Run the protocol once and cache the trace. Stepping only reveals more of the
@@ -291,14 +315,9 @@ export function renderSessionPanel(root: HTMLElement): void {
       output.append(loneSignerSection(r));
       output.append(breakItSection(r));
       output.append(
-        learnerCheck(
-          'A verifier is handed the 64-byte signature and the 32-byte aggregate key. Can it tell how many people signed?',
-          [
-            { label: 'No — the output looks identical either way', correct: true },
-            { label: 'Yes, from the signature length', correct: false },
-            { label: 'Yes, from the aggregate key', correct: false },
-          ],
-          'No. The aggregate signature is 64 bytes and the aggregate key is 32 bytes for any number of signers, and both are ordinary BIP-340 values. That privacy and that constant size are the practical reasons MuSig2 exists — but note the flip side: the signer set is not recoverable from the chain, so a group that needs an audit trail has to record it elsewhere.',
+        predictionDebrief(
+          'indistinguishable',
+          'The aggregate signature is 64 bytes and the aggregate key is 32 bytes for any number of signers, and both are ordinary BIP-340 values — so a 50/50 guess is the best anyone can do. That constant size and that privacy are the practical reasons MuSig2 exists. Note the flip side: the signer set is not recoverable from the chain either, so a group that needs an audit trail has to record it somewhere else.',
         ),
       );
       output.append(scopeNotes());
@@ -324,23 +343,42 @@ export function renderSessionPanel(root: HTMLElement): void {
    * so the collapse is something the learner drives rather than a static picture.
    */
   function collapseDiagram(r: SessionResult, atStep: number): HTMLElement {
-    const rows: { label: string; parts: string[]; agg: string | null; unit: string }[] = [
+    // Each row names the OPERATION being performed, not just the values. "Many things
+    // became one thing" is the easy half; "each was multiplied by a coefficient first,
+    // and that coefficient is what makes it safe" is the half that matters.
+    const rows: {
+      label: string;
+      parts: string[];
+      partLabels: string[];
+      agg: string | null;
+      unit: string;
+      op: string;
+    }[] = [
       {
         label: 'Public keys',
         unit: '33 bytes each',
+        op: atStep >= 2 ? 'each × a_i, then summed' : 'not yet combined',
         parts: r.signers.map((s) => short(s.pubkey, 6)),
+        partLabels: r.signers.map((_, i) => (atStep >= 2 ? `a_${i + 1}·P_${i + 1}` : `P_${i + 1}`)),
         agg: atStep >= 2 ? short(r.aggregateKeyX, 6) : null,
       },
       {
         label: 'Nonces',
         unit: '2 per signer',
-        parts: atStep >= 3 ? r.round1.pubnonces.map((p) => `${short(p.first, 4)} · ${short(p.second, 4)}`) : [],
+        op: atStep >= 4 ? 'halves summed, then R_1 + b·R_2' : 'not yet combined',
+        parts:
+          atStep >= 3
+            ? r.round1.pubnonces.map((p) => `${short(p.first, 4)} · ${short(p.second, 4)}`)
+            : [],
+        partLabels: r.round1.pubnonces.map((_, i) => `R_${i + 1}1 · R_${i + 1}2`),
         agg: atStep >= 4 ? short(r.sessionValues.rx, 6) : null,
       },
       {
         label: 'Signatures',
         unit: '32-byte scalar each',
+        op: atStep >= 6 ? 'added, mod n' : 'not yet combined',
         parts: atStep >= 5 ? r.round2.map((p) => short(p.psigHex, 6)) : [],
+        partLabels: r.round2.map((_, i) => `s_${i + 1}`),
         agg: atStep >= 6 ? short(r.aggregation.signatureHex, 6) : null,
       },
     ];
@@ -363,11 +401,21 @@ export function renderSessionPanel(root: HTMLElement): void {
             { class: 'collapse-parts' },
             ...(row.parts.length
               ? row.parts.map((p, i) =>
-                  h('code', { class: 'chip' }, h('span', { class: 'chip-idx' }, `${i + 1}`), p),
+                  h(
+                    'code',
+                    { class: 'chip' },
+                    h('span', { class: 'chip-idx' }, row.partLabels[i] ?? `${i + 1}`),
+                    p,
+                  ),
                 )
               : [h('span', { class: 'collapse-pending' }, 'not computed yet')]),
           ),
-          h('div', { class: 'collapse-arrow', 'aria-hidden': 'true' }, '→'),
+          h(
+            'div',
+            { class: 'collapse-arrow' },
+            h('span', { 'aria-hidden': 'true' }, '→'),
+            h('span', { class: 'collapse-op' }, row.op),
+          ),
           h(
             'div',
             { class: 'collapse-agg' },
@@ -443,6 +491,10 @@ export function renderSessionPanel(root: HTMLElement): void {
             code('L'),
             ' — which itself hashes every key, including its own. That circularity is exactly what defeats the rogue-key attack; the Rogue Key exhibit lets you try to break it.',
           ),
+          bridge(
+            'The coefficients are not cosmetic — they are the only thing standing between this key list and an attacker who picks their key last.',
+            'What exactly does that attacker do, and what happens if the coefficients are not there?',
+          ),
         );
         break;
       }
@@ -479,6 +531,22 @@ export function renderSessionPanel(root: HTMLElement): void {
           }),
           field('R = R_1 + b·R_2', r.sessionValues.rx, { sub: 'the nonce the signature commits to' }),
           field('e — the BIP-340 challenge', r.sessionValues.e, { sub: 'tagged-hash(R ‖ Q ‖ m)' }),
+          h(
+            'div',
+            { class: 'dep-chain', role: 'group', 'aria-label': 'How the nonce coefficient is derived' },
+            h('span', { class: 'dep-node' }, 'aggregate nonce bytes'),
+            h('span', { class: 'dep-arrow', 'aria-hidden': 'true' }, '→'),
+            h('span', { class: 'dep-node dep-node-key' }, 'b = H(aggnonce ‖ Q ‖ m)'),
+            h('span', { class: 'dep-arrow', 'aria-hidden': 'true' }, '→'),
+            h('span', { class: 'dep-node' }, 'R = R_1 + b·R_2'),
+            h('span', { class: 'dep-arrow', 'aria-hidden': 'true' }, '→'),
+            h('span', { class: 'dep-node' }, 'e = H(R ‖ Q ‖ m)'),
+          ),
+          h(
+            'p',
+            { class: 'help' },
+            'Read that chain left to right and the second defence is obvious: a signer who changes its nonce changes the first box, which changes every box after it. There is no way to move R without moving b first.',
+          ),
           ...(r.sessionValues.usedInfinityFallback
             ? [
                 note(
@@ -706,7 +774,7 @@ export function renderSessionPanel(root: HTMLElement): void {
 
     return h(
       'div',
-      { class: 'aha' },
+      { class: 'aha', id: 'tour-blind' },
       h('h3', {}, 'One of these was signed by a group. Which one?'),
       h(
         'p',
@@ -863,6 +931,75 @@ export function renderSessionPanel(root: HTMLElement): void {
       note(
         'caveat',
         'Not production crypto — a teaching demo. Real signers need constant-time arithmetic, nonce storage that guarantees single use, and an audited implementation such as libsecp256k1. A passing session here proves the arithmetic matches BIP-327 on these inputs; it proves nothing about side channels, key management, or the security of the deployment around it.',
+      ),
+    );
+  }
+
+  /**
+   * The exit check. Not a recap — a scenario the learner has not seen, because the
+   * question that matters is whether the idea transfers. The 2-of-3 case is the most
+   * dangerous misconception this lab could leave behind: MuSig2 looks like "multisig"
+   * and is not a quorum scheme.
+   */
+  function transferSection(): HTMLElement {
+    return h(
+      'section',
+      { class: 'transfer', id: 'tour-transfer' },
+      h('h2', {}, 'Exit check: can you use this?'),
+      h(
+        'p',
+        { class: 'help' },
+        'Two scenarios you have not seen on this page, and one matching exercise. If these come out right, you have the idea — not just the page.',
+      ),
+      exitQuestion(
+        'A custody team wants any 2 of their 3 devices to be able to approve a payment, and they also want the on-chain spend to look like a single signer. Should they use the MuSig2 setup shown here?',
+        [
+          { label: 'No — this is 3-of-3; they need a threshold scheme', correct: true },
+          { label: 'Yes — MuSig2 aggregates any subset', correct: false },
+          { label: 'Yes, if they aggregate only the two devices that sign', correct: false },
+        ],
+        'No. MuSig2 is n-of-n: every key in the aggregated list must contribute, so a 3-key group needs all 3. It gives them key and signature aggregation, not a quorum — and if one device is lost, the funds are gone. FROST is the scheme for t-of-n, and it also produces one ordinary signature. Aggregating only the two devices that show up would produce a different aggregate key, which is not the key holding the funds.',
+      ),
+      exitQuestion(
+        'A three-member group uses MuSig2 correctly. What can an observer learn from the key-path signature alone?',
+        [
+          { label: 'Nothing about the signers — it is an ordinary key and signature', correct: true },
+          { label: 'The number of signers, from the signature size', correct: false },
+          { label: 'The group members, from the aggregate key', correct: false },
+        ],
+        'From the signature alone: nothing. It is a 32-byte x-only key and a 64-byte signature, identical in form to a lone signer\u2019s. But be precise about the scope of that claim — a participant knows the key list, and anyone who watched the two rounds of network traffic saw the group assemble. MuSig2 hides the group from whoever reads the finished signature, not from everyone.',
+      ),
+      h('h3', {}, 'Match each threat to what actually defends against it'),
+      matchingTask({
+        idPrefix: 'transfer-match',
+        rows: [
+          {
+            threat: 'A signer picks their public key last and cancels the honest keys',
+            correct: 'Per-key coefficients bound to the full key list',
+          },
+          {
+            threat: 'An attacker manipulates nonces across concurrent sessions',
+            correct: 'Two nonces combined with a hash-derived b',
+          },
+          {
+            threat: 'One of the n signers disappears',
+            correct: 'Nothing in MuSig2 — n-of-n signing simply fails',
+          },
+          {
+            threat: 'A signer reuses a secret nonce across two messages',
+            correct: 'Operational nonce lifecycle — not solved by aggregation',
+          },
+        ],
+        choices: [
+          'Per-key coefficients bound to the full key list',
+          'Two nonces combined with a hash-derived b',
+          'Nothing in MuSig2 — n-of-n signing simply fails',
+          'Operational nonce lifecycle — not solved by aggregation',
+        ],
+      }),
+      note(
+        'caveat',
+        'The last two rows matter as much as the first two. Aggregation is not a substitute for availability or for nonce hygiene, and a demo that only showed the wins would be teaching you to over-trust it.',
       ),
     );
   }

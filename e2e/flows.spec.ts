@@ -337,10 +337,15 @@ test.describe('the drawable group', () => {
 });
 
 test.describe('the Wagner forgery', () => {
-  test('forges a signature on a message the honest signer never saw', async ({ page }) => {
-    const errors = noPageErrors(page);
+  /** Both forgeries are advanced material now, behind a disclosure by default. */
+  test.beforeEach(async ({ page }) => {
     await page.goto('.');
     await page.locator('#tab-nonce').click();
+    await page.locator('#tour-advanced > summary').click();
+  });
+
+  test('forges a signature on a message the honest signer never saw', async ({ page }) => {
+    const errors = noPageErrors(page);
     await btn(page, '#panel-nonce', 'Forge a signature nobody authorised').click();
 
     const section = page.locator('#panel-nonce .wagner-section');
@@ -359,8 +364,6 @@ test.describe('the Wagner forgery', () => {
   });
 
   test('works at a narrower search width too', async ({ page }) => {
-    await page.goto('.');
-    await page.locator('#tab-nonce').click();
     await page.locator('#wagner-bits').selectOption('21');
     await btn(page, '#panel-nonce', 'Forge a signature nobody authorised').click();
     const section = page.locator('#panel-nonce .wagner-section');
@@ -369,8 +372,6 @@ test.describe('the Wagner forgery', () => {
   });
 
   test('the same attack against two nonces cannot fix a target', async ({ page }) => {
-    await page.goto('.');
-    await page.locator('#tab-nonce').click();
     await btn(page, '#panel-nonce', 'Try to fix a target under two nonces').click();
 
     const section = page.locator('#panel-nonce .wagner-fixed');
@@ -387,8 +388,6 @@ test.describe('the Wagner forgery', () => {
 
   test('the ROS attack forges at FULL width, with nothing reduced', async ({ page }) => {
     const errors = noPageErrors(page);
-    await page.goto('.');
-    await page.locator('#tab-nonce').click();
     await btn(page, '#panel-nonce', 'Forge at full 256-bit width').click();
 
     const section = page.locator('#panel-nonce .ros-section');
@@ -405,8 +404,6 @@ test.describe('the Wagner forgery', () => {
   });
 
   test('ROS against two nonces loses its constant target and is rejected', async ({ page }) => {
-    await page.goto('.');
-    await page.locator('#tab-nonce').click();
     await btn(page, '#panel-nonce', 'Run ROS against two nonces').click();
 
     const section = page.locator('#panel-nonce .ros-fixed');
@@ -418,8 +415,6 @@ test.describe('the Wagner forgery', () => {
   });
 
   test('is honest about what it does not cover', async ({ page }) => {
-    await page.goto('.');
-    await page.locator('#tab-nonce').click();
     const scope = page.locator('#panel-nonce details', { hasText: 'What this shows' });
     await scope.locator('summary').click();
     await expect(scope).toContainText('asserted rather than proven');
@@ -450,6 +445,175 @@ test.describe('the BIP-327 vectors', () => {
     await first.locator('summary').click();
     await expect(first).toContainText('Expected');
     await expect(first).toContainText('This implementation produced');
+  });
+});
+
+test.describe('the guided tour', () => {
+  test('walks nine stops and drives the tabs across them', async ({ page }) => {
+    const errors = noPageErrors(page);
+    await page.goto('.');
+    // The invitation is the dominant first action; the bar only appears once started.
+    await expect(page.locator('#tour-invite')).toBeVisible();
+    await expect(page.locator('#tour-bar')).toBeHidden();
+
+    await btn(page, '#tour-invite', 'Start the guided tour').click();
+    await expect(page.locator('#tour-bar')).toBeVisible();
+    await expect(page.locator('#tour-invite')).toBeHidden();
+
+    const seenTabs = new Set<string>();
+    for (let i = 1; i <= 9; i++) {
+      await expect(page.locator('.tour-label')).toContainText(`Step ${i} of 9`);
+      seenTabs.add((await page.locator('.tab-btn[aria-selected="true"]').innerText()).trim());
+      // Progress is visible, not just internal state.
+      await expect(page.locator('.tour-dot-now')).toHaveCount(1);
+      await expect(page.locator('.tour-dot-done')).toHaveCount(i - 1);
+      if (i < 9) await page.locator('.tour-actions button', { hasText: 'Continue' }).click();
+    }
+    // The lesson genuinely crosses exhibits rather than staying in one tab.
+    expect(seenTabs.has('Signing Session')).toBe(true);
+    expect(seenTabs.has('Rogue Key Attack')).toBe(true);
+    expect(seenTabs.has('Why Two Nonces')).toBe(true);
+
+    await page.locator('.tour-actions button', { hasText: 'Finish' }).click();
+    await expect(page.locator('#tour-invite')).toBeVisible();
+    expect(errors).toEqual([]);
+  });
+
+  test('survives a reload mid-lesson', async ({ page }) => {
+    await page.goto('.');
+    await btn(page, '#tour-invite', 'Start the guided tour').click();
+    await page.locator('.tour-actions button', { hasText: 'Continue' }).click();
+    await page.locator('.tour-actions button', { hasText: 'Continue' }).click();
+    await expect(page.locator('.tour-label')).toContainText('Step 3 of 9');
+    await page.reload();
+    await expect(page.locator('.tour-label')).toContainText('Step 3 of 9');
+  });
+
+  test('the blind challenge exists when the tour jumps to it', async ({ page }) => {
+    // Stop 8 anchors on a section that only renders once every step is revealed, so
+    // the tour has to put the panel into that state itself.
+    await page.goto('.');
+    await btn(page, '#tour-invite', 'Start the guided tour').click();
+    for (let i = 0; i < 7; i++) {
+      await page.locator('.tour-actions button', { hasText: 'Continue' }).click();
+    }
+    await expect(page.locator('.tour-label')).toContainText('Back to the promise');
+    await expect(page.locator('#tour-blind')).toBeVisible();
+    await expect(page.locator('#tour-blind .sig-card')).toHaveCount(2);
+  });
+
+  test('Start over clears recorded predictions', async ({ page }) => {
+    await page.goto('.');
+    await page.locator('#panel-session .predict-opt').first().click();
+    await expect(page.locator('#panel-session .predict-status')).toContainText('recorded');
+    await btn(page, '#tour-invite', 'Start the guided tour').click();
+    await page.locator('.tour-actions button', { hasText: 'Start over' }).click();
+    await expect(page.locator('.tour-label')).toContainText('Step 1 of 9');
+    await expect(page.locator('#panel-session .predict-status')).toBeEmpty();
+  });
+});
+
+test.describe('predict before you compute', () => {
+  test('a prediction is recorded but not graded until the experiment runs', async ({ page }) => {
+    await page.goto('.');
+    await page.locator('#tab-rogue').click();
+    const predict = page.locator('#panel-rogue .predict');
+    await predict.locator('.predict-opt').first().click();
+    // Recorded, and deliberately NOT told whether it was right.
+    await expect(predict.locator('.predict-status')).toContainText('Prediction recorded');
+    await expect(predict.locator('.pill-ok')).toHaveCount(0);
+    await expect(predict.locator('.pill-bad')).toHaveCount(0);
+    // The verdict arrives in the debrief, after the experiments.
+    await expect(page.locator('#panel-rogue .predict-debrief .pill-ok')).toBeVisible();
+  });
+
+  test('the debrief nudges rather than spoils when nothing was predicted', async ({ page }) => {
+    await page.goto('.');
+    await page.locator('#tab-nonce').click();
+    const debrief = page.locator('#panel-nonce .predict-debrief').first();
+    await expect(debrief).toContainText('did not record a prediction');
+    await expect(debrief.locator('.pill')).toHaveCount(0);
+  });
+
+  test('the indistinguishability question is asked before the reveal', async ({ page }) => {
+    await page.goto('.');
+    // It must sit above the blind comparison in document order, not after it.
+    const order = await page.evaluate(() => {
+      const predict = document.querySelector('#tour-predict-indist');
+      const steps = document.querySelector('#tour-steps');
+      if (!predict || !steps) return 'missing';
+      return predict.compareDocumentPosition(steps) & Node.DOCUMENT_POSITION_FOLLOWING
+        ? 'before'
+        : 'after';
+    });
+    expect(order).toBe('before');
+  });
+});
+
+test.describe('the exit check', () => {
+  test('rejects MuSig2-as-shown for a 2-of-3 requirement', async ({ page }) => {
+    await page.goto('.');
+    const transfer = page.locator('#tour-transfer');
+    await expect(transfer).toBeVisible();
+    const first = transfer.locator('.exit-q').first();
+    await first.locator('.check-opt').first().click();
+    await expect(first.locator('.pill-ok')).toBeVisible();
+    await expect(first).toContainText('n-of-n');
+    // And the wrong answer is corrected, not merely marked.
+    await first.locator('.check-opt').nth(1).click();
+    await expect(first.locator('.pill-bad')).toBeVisible();
+    await expect(first).toContainText('FROST');
+  });
+
+  test('grades the threat-to-defence matching, including the no-defence row', async ({ page }) => {
+    await page.goto('.');
+    const task = page.locator('#tour-transfer .match-task');
+    const selects = task.locator('select');
+    await expect(selects).toHaveCount(4);
+    // Answer all four correctly: rows are in the same order as the choice list.
+    for (let i = 0; i < 4; i++) await selects.nth(i).selectOption({ index: i + 1 });
+    await task.locator('button').click();
+    await expect(task.locator('.pill-ok')).toContainText('All four matched');
+
+    // Now get one wrong and check it is named.
+    await selects.nth(2).selectOption({ index: 4 });
+    await task.locator('button').click();
+    await expect(task.locator('.pill-bad')).toBeVisible();
+    await expect(task).toContainText('n-of-n signing simply fails');
+  });
+});
+
+test.describe('the advanced material is optional', () => {
+  test('Wagner and ROS are collapsed by default, behind a named disclosure', async ({ page }) => {
+    await page.goto('.');
+    await page.locator('#tab-nonce').click();
+    const advanced = page.locator('#tour-advanced');
+    await expect(advanced).toContainText('Advanced: turn nonce control into a full forgery');
+    expect(await advanced.evaluate((d: HTMLDetailsElement) => d.open)).toBe(false);
+    // Both forgeries live inside it, so the core lesson ends at the nonce comparison.
+    await expect(advanced.locator('.wagner-section')).toHaveCount(1);
+    await expect(advanced.locator('.ros-section')).toHaveCount(1);
+    // And it leads with the comparison table rather than dropping you into hex.
+    await advanced.locator('summary').click();
+    await expect(advanced.locator('table').first()).toContainText('Reduced parameter?');
+  });
+});
+
+test.describe('bridges between exhibits', () => {
+  test('every teaching panel says what it established and what comes next', async ({ page }) => {
+    await page.goto('.');
+    await btn(page, '#panel-session', 'Show all steps').click();
+    await expect(page.locator('#panel-session .bridge')).not.toHaveCount(0);
+    for (const [tab, panel] of [
+      ['#tab-keyagg', '#panel-keyagg'],
+      ['#tab-rogue', '#panel-rogue'],
+      ['#tab-nonce', '#panel-nonce'],
+    ] as const) {
+      await page.locator(tab).click();
+      const bridge = page.locator(`${panel} .bridge`).first();
+      await expect(bridge).toContainText('What this established');
+      await expect(bridge).toContainText('What it makes you ask');
+    }
   });
 });
 

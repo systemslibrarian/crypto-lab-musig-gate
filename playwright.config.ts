@@ -17,7 +17,7 @@ import { defineConfig, devices } from '@playwright/test';
 export default defineConfig({
   testDir: './e2e',
   fullyParallel: true,
-  timeout: 120_000, // the axe driver walks every exhibit + disclosure before scanning
+  timeout: 240_000, // the axe driver walks the tour, every exhibit and both forgeries
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
   reporter: 'list',

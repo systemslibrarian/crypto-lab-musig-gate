@@ -12,6 +12,7 @@
  */
 import {
   bothSides,
+  bridge,
   clear,
   code,
   disclosure,
@@ -21,6 +22,8 @@ import {
   learnerCheck,
   note,
   panelIntro,
+  prediction,
+  predictionDebrief,
   scrollRegion,
   short,
   verdict,
@@ -109,6 +112,9 @@ export function renderNoncePanel(root: HTMLElement): void {
     'Run ROS against two nonces',
   ) as HTMLButtonElement;
 
+  /** The advanced forgeries live inside a disclosure, appended after the shell. */
+  const advancedHost = h('div', { class: 'advanced-sections' });
+
   root.append(
     panelIntro(
       'Why two nonces, and not one',
@@ -156,9 +162,20 @@ export function renderNoncePanel(root: HTMLElement): void {
       ),
     ),
 
+    h('div', { id: 'tour-nonce-predict' }),
+    prediction(
+      'nonce-steer',
+      'The attacker publishes its nonce last, after seeing everyone else\u2019s. Can it choose a contribution that makes the plain sum R = ΣR_i land on a point it picked in advance?',
+      [
+        { label: 'Yes — one subtraction, first try, every time', correct: true },
+        { label: 'Only with a long search', correct: false },
+        { label: 'No — the sum is unpredictable', correct: false },
+      ],
+    ),
+
     h(
       'section',
-      { class: 'attack-block attack-broken' },
+      { class: 'attack-block attack-broken', id: 'tour-nonce-steer' },
       h('h3', {}, h('span', { class: 'pill pill-bad' }, 'BROKEN'), ' One nonce each: R = ΣR_i'),
       h(
         'p',
@@ -179,12 +196,21 @@ export function renderNoncePanel(root: HTMLElement): void {
 
     h(
       'section',
-      { class: 'attack-block attack-fixed grind-fixed' },
+      { class: 'attack-block attack-fixed grind-fixed', id: 'tour-nonce-fixed' },
       h('h3', {}, h('span', { class: 'pill pill-ok' }, 'BIP-327'), ' Two nonces each: R = R_1 + b·R_2'),
       h(
         'p',
         { class: 'help' },
         'Same attacker, same target. Each round it solves for the nonce its current b demands, then finds out what b the protocol really derives from the bytes it just published.',
+      ),
+      prediction(
+        'nonce-b',
+        'Now the multiplier b is computed from the aggregate nonce bytes — including the attacker\u2019s own. What happens when the attacker changes its nonce to steer the result?',
+        [
+          { label: 'b changes too, so the target moves', correct: true },
+          { label: 'b stays fixed; only R moves', correct: false },
+          { label: 'b is secret, so the attacker cannot compute it', correct: false },
+        ],
       ),
       h(
         'div',
@@ -198,6 +224,126 @@ export function renderNoncePanel(root: HTMLElement): void {
       twoOut,
     ),
 
+    predictionDebrief(
+      'nonce-steer',
+      'One subtraction is all it takes: R_attacker = R_target − ΣR_honest. There is no search because a plain sum is reversible, and whoever moves last simply solves for their own term.',
+    ),
+    predictionDebrief(
+      'nonce-b',
+      'b is neither secret nor random — anyone can compute it. The problem is ordering: b = H(aggnonce ‖ Q ‖ m) and the aggnonce contains the attacker\u2019s own nonce, so choosing a nonce to hit a target needs a b that only exists once the nonce is chosen. That circularity is the entire second defence.',
+    ),
+
+    bridge(
+      'A single nonce hands the challenge to whoever publishes last; a second nonce with a hash-derived coefficient takes it back.',
+      'Controlling the nonce is a capability — how does an attacker turn it into an actual forged signature, and does that route also close?',
+    ),
+
+    h(
+      'details',
+      { class: 'disclose advanced-block', id: 'tour-advanced' },
+      h('summary', {}, 'Advanced: turn nonce control into a full forgery'),
+      h(
+        'div',
+        { class: 'disclose-body' },
+        h(
+          'p',
+          {},
+          'Everything above is enough to understand why MuSig2 commits two nonces. What follows is the research-grade evidence that nonce control really does become a forgery — two independent routes, both run for real, both failing once the second nonce is in place. It is optional.',
+        ),
+        scrollRegion(
+          'The two forgery routes compared',
+          h(
+            'table',
+            { class: 'kat-table' },
+            h(
+              'thead',
+              {},
+              h(
+                'tr',
+                {},
+                h('th', { scope: 'col' }, 'Attack'),
+                h('th', { scope: 'col' }, 'Concurrent sessions'),
+                h('th', { scope: 'col' }, 'Reduced parameter?'),
+                h('th', { scope: 'col' }, 'What it needs'),
+                h('th', { scope: 'col' }, 'Why two nonces stop it'),
+              ),
+            ),
+            h(
+              'tbody',
+              {},
+              h(
+                'tr',
+                {},
+                h('th', { scope: 'row' }, 'Wagner'),
+                h('td', {}, '4'),
+                h('td', {}, 'Challenge width only'),
+                h('td', {}, 'A fixed k-list target'),
+                h('td', {}, 'b makes the target depend on the candidate nonces'),
+              ),
+              h(
+                'tr',
+                {},
+                h('th', { scope: 'row' }, 'ROS'),
+                h('td', {}, '256'),
+                h('td', {}, 'None'),
+                h('td', {}, 'A constant right-hand side'),
+                h('td', {}, 'b makes the right-hand side move'),
+              ),
+            ),
+          ),
+        ),
+        advancedHost,
+      ),
+    ),
+
+    disclosure(
+      'What this shows, and what it does not',
+      h(
+        'p',
+        {},
+        'What is real above: controlling the aggregate nonce, and losing that control to b. Both are computed on live secp256k1 points, and the "hit" and "missed" verdicts are the actual arithmetic.',
+      ),
+      h(
+        'p',
+        {},
+        'What is reduced: the forgery above truncates the challenge hash so Wagner’s search finishes in a browser tab. The algorithm is unmodified and the forged signature genuinely verifies in that reduced scheme. At the real 256-bit width the same k-tree with k = 4 needs on the order of 2^85 operations, so this is a devastating break in theory and not something you will ever watch happen. Nothing else is reduced: the curve, the keys, the coefficients, the oracle and the verifier are all real.',
+      ),
+      h(
+        'p',
+        {},
+        'What is not here: the polynomial-time ROS attack of Benhamouda, Lepoint, Loss, Orrù and Raykova (2020), which breaks the same schemes without any birthday search but needs roughly 256 concurrent sessions. The Wagner route (Drijvers et al., "On the Security of Two-Round Multi-Signatures", IEEE S&P 2019) is the one implemented here because four sessions is something you can actually watch.',
+      ),
+      h(
+        'p',
+        {},
+        'What is asserted rather than proven: that no cleverer attack exists against the two-nonce version. This page shows one specific attack failing for one specific, precise reason. The positive security claim comes from MuSig2’s proof, not from this demo.',
+      ),
+    ),
+
+    learnerCheck(
+      'Why can’t the attacker just solve for b as well, since it can see the formula?',
+      [
+        { label: 'b is a hash of the nonce the attacker is choosing', correct: true },
+        { label: 'b is kept secret by the other signers', correct: false },
+        { label: 'b is chosen at random by the verifier', correct: false },
+      ],
+      'b is not secret and not random — anyone can compute it. The problem is the ordering: b = H(aggnonce ‖ Q ‖ m), and the aggnonce contains the attacker’s own nonce. Choosing a nonce to hit a target requires knowing b, and knowing b requires having already chosen the nonce. That is a hash fixed point, which is exactly the kind of problem SHA-256 makes hard.',
+    ),
+
+    note(
+      'caveat',
+      'Not production crypto — a teaching demo. Separately from nonce aggregation: reusing a secret nonce across two messages leaks a Schnorr private key outright, which this lab prevents by zeroing each secret nonce on use. That attack is demonstrated end to end in ',
+      labLink('crypto-lab-schnorr-forge', 'crypto-lab-schnorr-forge'),
+      '.',
+    ),
+  );
+
+  function aggregateKey() {
+    const keys = Array.from({ length: honestCount + 1 }, () => cbytes(mul(G, randomScalar())));
+    return keyAgg(keys).Q;
+  }
+
+  advancedHost.append(
     h(
       'section',
       { class: 'attack-block attack-broken wagner-section' },
@@ -277,53 +423,7 @@ export function renderNoncePanel(root: HTMLElement): void {
       h('div', { class: 'action-row' }, rosTwoBtn),
       rosTwoOut,
     ),
-
-    disclosure(
-      'What this shows, and what it does not',
-      h(
-        'p',
-        {},
-        'What is real above: controlling the aggregate nonce, and losing that control to b. Both are computed on live secp256k1 points, and the "hit" and "missed" verdicts are the actual arithmetic.',
-      ),
-      h(
-        'p',
-        {},
-        'What is reduced: the forgery above truncates the challenge hash so Wagner’s search finishes in a browser tab. The algorithm is unmodified and the forged signature genuinely verifies in that reduced scheme. At the real 256-bit width the same k-tree with k = 4 needs on the order of 2^85 operations, so this is a devastating break in theory and not something you will ever watch happen. Nothing else is reduced: the curve, the keys, the coefficients, the oracle and the verifier are all real.',
-      ),
-      h(
-        'p',
-        {},
-        'What is not here: the polynomial-time ROS attack of Benhamouda, Lepoint, Loss, Orrù and Raykova (2020), which breaks the same schemes without any birthday search but needs roughly 256 concurrent sessions. The Wagner route (Drijvers et al., "On the Security of Two-Round Multi-Signatures", IEEE S&P 2019) is the one implemented here because four sessions is something you can actually watch.',
-      ),
-      h(
-        'p',
-        {},
-        'What is asserted rather than proven: that no cleverer attack exists against the two-nonce version. This page shows one specific attack failing for one specific, precise reason. The positive security claim comes from MuSig2’s proof, not from this demo.',
-      ),
-    ),
-
-    learnerCheck(
-      'Why can’t the attacker just solve for b as well, since it can see the formula?',
-      [
-        { label: 'b is a hash of the nonce the attacker is choosing', correct: true },
-        { label: 'b is kept secret by the other signers', correct: false },
-        { label: 'b is chosen at random by the verifier', correct: false },
-      ],
-      'b is not secret and not random — anyone can compute it. The problem is the ordering: b = H(aggnonce ‖ Q ‖ m), and the aggnonce contains the attacker’s own nonce. Choosing a nonce to hit a target requires knowing b, and knowing b requires having already chosen the nonce. That is a hash fixed point, which is exactly the kind of problem SHA-256 makes hard.',
-    ),
-
-    note(
-      'caveat',
-      'Not production crypto — a teaching demo. Separately from nonce aggregation: reusing a secret nonce across two messages leaks a Schnorr private key outright, which this lab prevents by zeroing each secret nonce on use. That attack is demonstrated end to end in ',
-      labLink('crypto-lab-schnorr-forge', 'crypto-lab-schnorr-forge'),
-      '.',
-    ),
   );
-
-  function aggregateKey() {
-    const keys = Array.from({ length: honestCount + 1 }, () => cbytes(mul(G, randomScalar())));
-    return keyAgg(keys).Q;
-  }
 
   function runSingle(): void {
     clear(singleOut);
@@ -381,8 +481,8 @@ export function renderNoncePanel(root: HTMLElement): void {
             'tr',
             {},
             h('td', {}, String(a.round)),
-            h('td', {}, h('code', {}, a.b === null ? 'n/a' : short(hex32(a.b), 8))),
-            h('td', {}, h('code', {}, short(a.achievedX, 8))),
+            h('td', { class: 'cell-moving' }, h('code', {}, a.b === null ? 'n/a' : short(hex32(a.b), 8))),
+            h('td', { class: 'cell-moving' }, h('code', {}, short(a.achievedX, 8))),
             h(
               'td',
               {},
@@ -407,6 +507,19 @@ export function renderNoncePanel(root: HTMLElement): void {
           ? 'the attacker hit its target, which must not happen under the two-nonce construction'
           : 'every round missed — the target moves as the attacker reaches for it',
         r.hitTarget ? 'Nonce hijacked' : 'Attack failed',
+      ),
+      h(
+        'ol',
+        { class: 'loop-list' },
+        h('li', {}, 'The attacker uses the b it currently believes.'),
+        h('li', {}, 'It chooses nonce bytes intended to make R land on the target.'),
+        h('li', {}, 'The protocol hashes the bytes it just published and derives a different b.'),
+        h('li', {}, 'R is recomputed with that b — and misses.'),
+      ),
+      h(
+        'p',
+        { class: 'help' },
+        'Every row of the table above is one turn of that loop. The b column is the thing that moved, and the aggregate-nonce column is the consequence.',
       ),
       note(
         'info',

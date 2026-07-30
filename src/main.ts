@@ -1,11 +1,11 @@
 import './style.css';
+import { resetPredictions } from './ui/dom.js';
+import { type PanelKey, mountTour } from './ui/tour.js';
 import { renderSessionPanel } from './ui/sessionPanel.js';
 import { renderKeyAggPanel } from './ui/keyaggPanel.js';
 import { renderRoguePanel } from './ui/roguePanel.js';
 import { renderNoncePanel } from './ui/noncePanel.js';
 import { renderVectorsPanel } from './ui/vectorsPanel.js';
-
-type PanelKey = 'session' | 'keyagg' | 'rogue' | 'nonce' | 'vectors';
 
 const renderers: Record<PanelKey, (root: HTMLElement) => void> = {
   session: renderSessionPanel,
@@ -59,6 +59,24 @@ function wireTabs(): void {
 }
 
 wireTabs();
+
+/**
+ * The guided tour sits above the tabs and drives them. It is mounted before the
+ * initial tab selection so a resumed tour can take over from the default panel.
+ */
+const tourHost = document.getElementById('tour-host');
+if (tourHost) {
+  mountTour(tourHost, selectTab, () => {
+    // "Start over" means the whole lesson, not one panel: drop recorded predictions
+    // and re-render every exhibit from scratch.
+    resetPredictions();
+    for (const key of rendered) {
+      const el = panelEl(key);
+      el.replaceChildren();
+      renderers[key](el);
+    }
+  });
+}
 
 /** #keyagg / #rogue / #nonce / #vectors deep-link straight to an exhibit. */
 function openFromHash(): boolean {

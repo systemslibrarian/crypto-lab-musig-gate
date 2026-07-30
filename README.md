@@ -30,6 +30,18 @@ Every finished signature is checked twice: once by a hand-rolled BIP-340 verifie
 
 **Not production crypto — a teaching demo.** The arithmetic is real and matches the specification's own test vectors, but it uses ordinary JavaScript `BigInt` and is **not constant-time**. It does nothing to solve the hardest operational problem in MuSig2, which is guaranteeing a secret nonce is used at most once across process restarts. For real signing, use an audited implementation such as [libsecp256k1](https://github.com/bitcoin-core/secp256k1).
 
+## How it teaches
+
+The five exhibits are not peers — they are one argument, and the interface now says so.
+
+A **guided tour** runs nine stops across the tabs, in the order the ideas depend on each other: the promise → predict → run it → break naive key aggregation → repair it → break naive nonce aggregation → repair it → back to the promise → prove you can transfer it. Each stop shows its position, says what to do, and its Continue button moves to the next relevant state even when that means changing tabs and putting a panel into a particular state first. The tabs still work exactly as before for free exploration and deep links; the tour is an overlay, not a replacement.
+
+Three questions are asked **before** the experiment that answers them, not after — which is the difference between testing whether you read something and testing whether you understood it. A prediction is recorded and deliberately *not* graded at that moment; the experiment runs, and a debrief elsewhere on the page reports whether you were right and why.
+
+The default path ends at the one-nonce/two-nonce comparison, which is all that is needed to understand why MuSig2 commits two nonces. The Wagner and ROS forgeries are research-grade evidence and sit behind an **Advanced** disclosure, led by a table comparing the two routes — present for anyone who wants them, not an obstacle for everyone else.
+
+Each panel closes by saying what it established and what question that creates, and the lab ends with an **exit check**: two scenarios not seen anywhere else on the page, plus a threat-to-defence matching exercise whose four rows include *"one of the n signers disappears → nothing in MuSig2 defends against this"*. That row matters as much as the wins — the most dangerous misconception this lab could leave behind is that MuSig2 is generic threshold multisig.
+
 ## Exhibits
 
 1. **Signing Session** — one real MuSig2 session, stepped through six stages. A collapse diagram shows n public keys becoming 1, n nonce pairs becoming 1 nonce, and n partial signatures becoming 1 signature, with every coefficient, challenge and scalar shown at the stage that computes it. Choose 2–5 signers, type the message, toggle BIP-327 KeySort and watch the aggregate key move. Each signer's partial is checked in the group as well as the scalar field — `s_i·G` against `(R_i1 + b·R_i2)^± + e·a_i·g′·P_i`, compared byte-for-byte — and the secret scalars can be revealed so the equation is checkable by hand. The final stage hands the 64 bytes to a plain BIP-340 verifier. Break-it controls corrupt a single bit of one partial signature (the aggregator names the culprit) and attempt to sign with one signer absent (MuSig2 is n-of-n). A collapsed glossary introduces every term the page uses.
@@ -97,7 +109,7 @@ BIP-327 supersedes the original MuSig2 paper's parameterisation for Bitcoin use 
 ```bash
 npm ci
 npm run dev        # http://localhost:5173/crypto-lab-musig-gate/
-npm test           # 242 unit tests, including the 56 BIP-327 spec KATs
+npm test           # 254 unit tests, including the 56 BIP-327 spec KATs
 npm run build      # tsc --noEmit && vite build
 npm run preview    # serve the production build (the a11y gate serves it on port 4276)
 npm run test:a11y  # what CI gates on: axe (both themes) + flows on Chromium desktop & mobile
@@ -118,7 +130,7 @@ Requires Node 22+. `npm run test:a11y` needs the Playwright Chromium browser onc
 
 ## Build & Verify
 
-**242 unit tests (Vitest), including 56 official BIP-327 known-answer cases** — 30 that must be accepted, 26 that must be rejected — plus **138 end-to-end tests (Playwright)** across four browser engines. All pass.
+**254 unit tests (Vitest), including 56 official BIP-327 known-answer cases** — 30 that must be accepted, 26 that must be rejected — plus **190 end-to-end tests (Playwright)** across four browser engines. All pass.
 
 Spec vectors, verbatim from [bitcoin/bips · bip-0327/vectors](https://github.com/bitcoin/bips/tree/master/bip-0327/vectors):
 
@@ -134,7 +146,7 @@ Spec vectors, verbatim from [bitcoin/bips · bip-0327/vectors](https://github.co
 
 The same runners (`src/musig/vectors.ts`) drive both the Vitest suite and exhibit 5's live table, so a green table in the browser and a green CI run are the same claim.
 
-**End-to-end (Playwright):** 34 functional flows across **four engines** — Chromium desktop, a Pixel 5 viewport, Firefox and WebKit — assert what the unit suite structurally cannot — that each exhibit renders its result rather than throwing, that alarm-versus-pass semantics actually reach the DOM (a successful forgery must render as `.verdict-alarm`, never `.verdict-pass`), that stepping reveals more of the *same* session rather than resampling it, that the blind pair really is indistinguishable, that a corrupted partial marks exactly one signer, that a malformed rogue key is refused before signing, that the theme toggle persists across a reload, that there is exactly one `<h1>` and one banner landmark, that arrow keys move between tabs, that the scripture line appears verbatim exactly once, and that nothing overflows horizontally at 320px. The Wagner forgery has its own flows: it must render as `.verdict-alarm`, `Σ e_j` must match `e*` exactly, and the two-nonce attempt must produce a distinct target for every probe. Every flow also asserts zero uncaught page errors and zero console errors.
+**End-to-end (Playwright):** 47 functional flows across **four engines** — Chromium desktop, a Pixel 5 viewport, Firefox and WebKit — assert what the unit suite structurally cannot — that each exhibit renders its result rather than throwing, that alarm-versus-pass semantics actually reach the DOM (a successful forgery must render as `.verdict-alarm`, never `.verdict-pass`), that stepping reveals more of the *same* session rather than resampling it, that the blind pair really is indistinguishable, that a corrupted partial marks exactly one signer, that a malformed rogue key is refused before signing, that the theme toggle persists across a reload, that there is exactly one `<h1>` and one banner landmark, that arrow keys move between tabs, that the scripture line appears verbatim exactly once, and that nothing overflows horizontally at 320px. The Wagner forgery has its own flows: it must render as `.verdict-alarm`, `Σ e_j` must match `e*` exactly, and the two-nonce attempt must produce a distinct target for every probe. The teaching layer is tested too: the tour must walk all nine stops and genuinely cross exhibits, survive a reload mid-lesson, and reach a stop whose anchor only exists once a panel is in a particular state; a prediction must be recorded *without* being graded, with the verdict arriving only in the debrief; the advanced forgeries must be collapsed by default; and the exit check must reject MuSig2-as-shown for a 2-of-3 requirement. Every flow also asserts zero uncaught page errors and zero console errors.
 
 Two workflows, for one reason: `deploy.yml` must stay byte-for-byte identical across the fleet and it installs only Chromium, so Firefox and WebKit cannot run inside it. `.github/workflows/e2e.yml` installs all three engines and runs the full matrix on every push and pull request, while `deploy.yml`'s gate step runs axe plus the Chromium flows. The Chromium projects therefore run in both places, deliberately.
 
