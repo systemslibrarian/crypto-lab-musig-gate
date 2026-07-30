@@ -83,6 +83,22 @@ test.describe('the signing session', () => {
   test('unticking KeySort changes the aggregate key', async ({ page }) => {
     await page.goto('.');
     await btn(page, '#panel-session', 'Show all steps').click();
+
+    // KeySort only moves the aggregate key when it actually reorders the list. With
+    // three random keys there is a ~1-in-6 chance they are already in order, in which
+    // case an unchanged Q is CORRECT — so re-key until sorting is a real permutation
+    // rather than asserting on a coin flip.
+    const sortedOrder = async (): Promise<string[]> =>
+      page.locator('#panel-session .step-card').first().locator('.field-label').allInnerTexts();
+    const reordered = async (): Promise<boolean> => {
+      const labels = (await sortedOrder()).filter((t) => t.startsWith('Signer '));
+      return labels.join(',') !== [...labels].sort().join(',');
+    };
+    for (let i = 0; i < 12 && !(await reordered()); i++) {
+      await btn(page, '#panel-session', 'New keys').click();
+    }
+    expect(await reordered()).toBe(true);
+
     const sorted = await page.locator('#panel-session .chip-agg').first().textContent();
     await page.locator('#sort-keys').uncheck();
     await btn(page, '#panel-session', 'Show all steps').click();
@@ -151,7 +167,7 @@ test.describe('key aggregation', () => {
     await page.goto('.');
     await page.locator('#tab-keyagg').click();
     const panel = page.locator('#panel-keyagg');
-    await expect(panel.locator('.both-sides .verdict-pass')).toContainText('byte-for-byte identical');
+    await expect(panel.locator('.both-sides .verdict-pass').first()).toContainText('match exactly');
     // Exactly one key gets the coefficient-1 shortcut.
     await expect(panel.locator('.pill', { hasText: 'second key → 1' })).toHaveCount(1);
     expect(errors).toEqual([]);
@@ -281,7 +297,101 @@ test.describe('why two nonces', () => {
     await scope.locator('summary').click();
     await expect(scope).toContainText('Wagner');
     await expect(scope).toContainText('ROS');
-    await expect(scope).toContainText('out of scope');
+    await expect(scope).toContainText('reduced');
+  });
+});
+
+test.describe('the drawable group', () => {
+  test('plots the real 127-element curve with a text alternative', async ({ page }) => {
+    const errors = noPageErrors(page);
+    await page.goto('.');
+    await page.locator('#tab-keyagg').click();
+    const plot = page.locator('#panel-keyagg .curve-plot');
+    await expect(plot).toBeVisible();
+    // All 126 affine points must be drawn — a partial scatter would misrepresent the group.
+    await expect(plot.locator('.cp-all circle')).toHaveCount(126);
+    await expect(plot).toHaveAttribute('role', 'img');
+    const alt = await plot.getAttribute('aria-label');
+    expect(alt).toContain('126 points');
+    expect(alt).toContain('aggregate key Q');
+    // The numbers behind the picture are also present as a table.
+    await expect(page.locator('#panel-keyagg .curve-section table tbody tr')).toHaveCount(3);
+    expect(errors).toEqual([]);
+  });
+
+  test('is explicit that it is the discrete group, not the textbook curve', async ({ page }) => {
+    await page.goto('.');
+    await page.locator('#tab-keyagg').click();
+    const section = page.locator('#panel-keyagg .curve-section');
+    await expect(section).toContainText('not the smooth curve from textbooks');
+    await expect(section).toContainText('no security at all');
+  });
+
+  test('the naive path can be toggled off', async ({ page }) => {
+    await page.goto('.');
+    await page.locator('#tab-keyagg').click();
+    await expect(page.locator('#panel-keyagg .cp-naive')).toHaveCount(1);
+    await btn(page, '#panel-keyagg', 'Toggle the naive').click();
+    await expect(page.locator('#panel-keyagg .cp-naive')).toHaveCount(0);
+  });
+});
+
+test.describe('the Wagner forgery', () => {
+  test('forges a signature on a message the honest signer never saw', async ({ page }) => {
+    const errors = noPageErrors(page);
+    await page.goto('.');
+    await page.locator('#tab-nonce').click();
+    await btn(page, '#panel-nonce', 'Forge a signature nobody authorised').click();
+
+    const section = page.locator('#panel-nonce .wagner-section');
+    // The attack must SUCCEED, and read as an alarm rather than a success.
+    await expect(section.locator('.verdict-alarm')).toContainText('Forged', { timeout: 60_000 });
+    await expect(section.locator('.verdict-alarm')).toContainText('never saw');
+    await expect(section).toContainText('confirmed');
+    // Σ e_j must equal e* exactly — the k-sum is the whole attack.
+    await expect(section.locator('.both-sides .verdict-pass')).toContainText('match exactly');
+    // Four sessions queried, one forged message.
+    await expect(section.locator('.msg-list').first().locator('li')).toHaveCount(4);
+    await expect(section.locator('.msg-forged')).toHaveCount(1);
+    // And it says plainly what the same attack costs unreduced.
+    await expect(section).toContainText('2^85');
+    expect(errors).toEqual([]);
+  });
+
+  test('works at a narrower search width too', async ({ page }) => {
+    await page.goto('.');
+    await page.locator('#tab-nonce').click();
+    await page.locator('#wagner-bits').selectOption('21');
+    await btn(page, '#panel-nonce', 'Forge a signature nobody authorised').click();
+    const section = page.locator('#panel-nonce .wagner-section');
+    await expect(section.locator('.verdict-alarm')).toContainText('Forged', { timeout: 60_000 });
+    await expect(section).toContainText('21 bits');
+  });
+
+  test('the same attack against two nonces cannot fix a target', async ({ page }) => {
+    await page.goto('.');
+    await page.locator('#tab-nonce').click();
+    await btn(page, '#panel-nonce', 'Try to fix a target under two nonces').click();
+
+    const section = page.locator('#panel-nonce .attack-fixed').last();
+    await expect(section.locator('.verdict-pass').first()).toContainText('No fixed target');
+    // Every probed nonce assignment produced a different target.
+    const rows = section.locator('table tbody tr');
+    await expect(rows).toHaveCount(5);
+    const targets = await section.locator('table tbody tr td:last-child code').allTextContents();
+    expect(new Set(targets).size).toBe(targets.length);
+    // The completed attempt is rejected by the same verifier.
+    await expect(section.locator('.verdict-pass', { hasText: 'Attack failed' })).toBeVisible();
+    await expect(section.locator('.verdict-alarm')).toHaveCount(0);
+  });
+
+  test('is honest about what it does not cover', async ({ page }) => {
+    await page.goto('.');
+    await page.locator('#tab-nonce').click();
+    const scope = page.locator('#panel-nonce details', { hasText: 'What this shows' });
+    await scope.locator('summary').click();
+    await expect(scope).toContainText('asserted rather than proven');
+    await expect(scope).toContainText('ROS');
   });
 });
 

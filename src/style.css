@@ -492,6 +492,81 @@ input[type="checkbox"] { accent-color: var(--accent); width: 1.05rem; height: 1.
 .glossary-body dd { margin: 0; font-size: 0.88rem; color: var(--text-dim); }
 .glossary-formal { color: var(--accent-text); }
 
+/* ---------- the drawable group ---------- */
+.curve-section { margin: 1rem 0; }
+.curve-figure { margin: 0; display: grid; gap: 0.6rem; }
+.curve-plot {
+  width: 100%;
+  max-width: 34rem;
+  height: auto;
+  margin: 0 auto;
+  display: block;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+/* Every dot below is a real curve point; nothing here is illustrative. */
+.cp-all circle { fill: var(--text-dim); opacity: 0.5; }
+.cp-axes line { stroke: var(--border); stroke-width: 1; }
+.cp-tick, .cp-axis-label { fill: var(--text-dim); font-size: 11px; font-family: var(--mono); }
+.cp-axis-label { font-weight: 700; fill: var(--text); }
+.cp-path polyline { stroke: var(--accent); stroke-width: 2; stroke-dasharray: none; }
+.cp-naive polyline { stroke: var(--bad); stroke-width: 1.5; stroke-dasharray: 4 3; }
+.cp-naive-end { fill: none; stroke: var(--bad); stroke-width: 2; }
+.cp-keys circle { fill: var(--accent); stroke: var(--bg); stroke-width: 1.5; }
+.cp-weighted { fill: none !important; stroke: var(--accent); stroke-width: 2; }
+.cp-kick { stroke: var(--accent); stroke-width: 1; stroke-dasharray: 2 2; opacity: 0.75; }
+.cp-num { fill: var(--accent-ink); font-size: 10px; font-weight: 700; font-family: var(--mono); }
+.cp-agg { fill: var(--ok); stroke: var(--bg); stroke-width: 2; }
+.cp-agg-label { fill: var(--accent-ink); font-size: 11px; font-weight: 700; font-family: var(--mono); }
+:root[data-theme="light"] .cp-agg-label { fill: #ffffff; }
+.cp-legend { display: flex; flex-wrap: wrap; gap: 0.35rem; align-items: center; font-size: 0.8rem; color: var(--text-dim); }
+.cp-swatch {
+  display: inline-block;
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 50%;
+  vertical-align: middle;
+}
+.cp-swatch-key { background: var(--accent); }
+.cp-swatch-weighted { border: 2px solid var(--accent); }
+.cp-swatch-agg { background: var(--ok); }
+.cp-swatch-path { width: 1.1rem; height: 0; border-radius: 0; border-top: 3px solid var(--accent); }
+.cp-swatch-naive { border: 2px dashed var(--bad); }
+.cp-caption-text { display: block; margin-top: 0.4rem; font-size: 0.82rem; color: var(--text-dim); }
+
+/* ---------- Wagner forgery ---------- */
+.wagner-block { display: grid; gap: 0.7rem; }
+.wagner-params { display: flex; flex-wrap: wrap; gap: 0.9rem; align-items: flex-end; }
+.wagner-stat {
+  display: grid;
+  gap: 0.1rem;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.45rem 0.7rem;
+  min-width: 7rem;
+}
+.wagner-stat-label { font-size: 0.72rem; color: var(--text-dim); font-weight: 600; }
+.wagner-stat-value { font-family: var(--mono); font-weight: 700; font-size: 0.95rem; }
+.wagner-stats { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.control-inline { display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.86rem; font-weight: 600; }
+/* Styled select needs appearance:none plus a drawn chevron, per the a11y gate. */
+.wagner-select {
+  appearance: none;
+  -webkit-appearance: none;
+  width: auto;
+  padding-right: 1.9rem;
+  background-image: linear-gradient(45deg, transparent 50%, var(--accent-text) 50%),
+    linear-gradient(135deg, var(--accent-text) 50%, transparent 50%);
+  background-position: calc(100% - 1rem) 55%, calc(100% - 0.65rem) 55%;
+  background-size: 0.35rem 0.35rem, 0.35rem 0.35rem;
+  background-repeat: no-repeat;
+}
+.wagner-section h4, .aha h4 { margin: 0.2rem 0 0; font-size: 0.92rem; }
+.msg-list { margin: 0; padding-left: 1.2rem; font-size: 0.88rem; display: grid; gap: 0.2rem; }
+.msg-forged { color: var(--bad-text); font-weight: 700; }
+
 /* ---------- footer ---------- */
 .scripture-footer {
   margin-top: 2.5rem;

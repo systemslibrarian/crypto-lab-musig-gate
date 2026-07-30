@@ -53,6 +53,10 @@ async function driveDemos(page: Page): Promise<void> {
   }
   await page.locator('#keyagg-count').fill('1').catch(() => {});
   await page.locator('#keyagg-count').press('ArrowRight').catch(() => {});
+  // The drawable-group plot, in both of its states.
+  await clickByText(page, '#panel-keyagg', 'New points on the small curve');
+  await clickByText(page, '#panel-keyagg', 'Toggle the naive');
+  await clickByText(page, '#panel-keyagg', 'Toggle the naive');
   await page.waitForTimeout(150);
 
   // --- Exhibit 3: the rogue-key attack, both modes + the manual path --------
@@ -76,6 +80,16 @@ async function driveDemos(page: Page): Promise<void> {
   await clickByText(page, '#panel-nonce', 'New target nonce');
   await clickByText(page, '#panel-nonce', 'Steer the aggregate nonce');
   await clickByText(page, '#panel-nonce', 'Try the same trick against two nonces');
+  // The Wagner forgery: a narrow width keeps the scan fast, and the select itself
+  // needs exercising since a styled <select> is its own a11y hazard.
+  await page.locator('#wagner-bits').selectOption('21').catch(() => {});
+  await clickByText(page, '#panel-nonce', 'Forge a signature nobody authorised');
+  await page
+    .locator('#panel-nonce .wagner-section .verdict')
+    .first()
+    .waitFor({ timeout: 60_000 })
+    .catch(() => {});
+  await clickByText(page, '#panel-nonce', 'Try to fix a target under two nonces');
   await page.waitForTimeout(150);
 
   // --- Exhibit 5: the BIP-327 vectors (renders on first activation) ---------

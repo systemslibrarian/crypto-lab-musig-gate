@@ -15,7 +15,12 @@ The exact primitives, all hand-rolled in `src/musig/` so every intermediate valu
 - **Partial signatures** — `s_i = k_i1 + b·k_i2 + e·a_i·d_i (mod n)`, each independently verifiable so a bad contribution is **attributable** to a signer.
 - **Aggregation** — `Σ s_i`, yielding `R.x ‖ s`: an ordinary 64-byte BIP-340 signature under the 32-byte aggregate key.
 
-Group arithmetic (point add/multiply, field square root, scalar inversion) comes from **[@noble/curves](https://github.com/paulmillr/noble-curves)** — audited, and deliberately not the teaching subject. BIP-327 itself is implemented here. Every finished signature is checked twice: once by a hand-rolled BIP-340 verifier that reports its stage pipeline, and once by `@noble/curves`' own `schnorr.verify`. The two must agree, and a disagreement is surfaced as a failure rather than swallowed.
+Group arithmetic (point add/multiply, field square root, scalar inversion) comes from **[@noble/curves](https://github.com/paulmillr/noble-curves)** — audited, and deliberately not the teaching subject. BIP-327 itself is implemented here.
+
+Two things are deliberately run at reduced scale, each labelled as such in the page, because the honest alternative was to describe them in prose:
+
+- **A drawable group.** `y² = x³ + 7` over **F_127** — the secp256k1 equation, same group law, 127 elements instead of 2^256 — so key aggregation can be *plotted* as real points and real additions. This is not the smooth textbook curve, which is the equation over the reals and a different object from the finite group cryptography happens in.
+- **A truncated challenge.** Wagner's k-list forgery (below) needs a birthday search, so the challenge hash is cut to 21–30 bits. The algorithm is unmodified and the forgery genuinely verifies; at the real 256-bit width the same k-tree needs on the order of 2^85 operations. Every finished signature is checked twice: once by a hand-rolled BIP-340 verifier that reports its stage pipeline, and once by `@noble/curves`' own `schnorr.verify`. The two must agree, and a disagreement is surfaced as a failure rather than swallowed.
 
 **Security model.** Honest-but-curious is not the threat model here: two exhibits hand the learner a real adversarial capability and let them use it. Secret keys and nonces are generated per session with WebCrypto, live only in tab memory, and are never persisted or transmitted. There is no backend.
 
@@ -27,8 +32,12 @@ Group arithmetic (point add/multiply, field square root, scalar inversion) comes
 
    The tab closes with **"One of these was signed by a group. Which one?"** — the headline claim put as a question rather than a statement. Two signatures over the same message sit side by side: one is this session's aggregate, the other comes from `@noble/curves`' ordinary single-signer `schnorr.sign`, and which slot is which is a WebCrypto coin flip. Guess, then reveal, then compare the two on every observable property — all of which read *identical*. It is equally clear about the limit: this hides the group from whoever reads the finished signature, not from a participant or a network observer.
 2. **Key Aggregation** — the coefficients in the foreground. `L`, the second-key shortcut, every `a_i`, and an independently recomputed `Σ a_i·P_i` compared byte-for-byte against `Q`. Reverse the key order, apply KeySort, or make every key identical to exercise the all-keys-equal sentinel, and see the naive `Σ P_i` aggregate side by side with the BIP-327 one.
+
+   The tab closes by **drawing it**: all 126 affine points of `y² = x³ + 7` over F_127, with each input key marked, an arrow to where its coefficient sent it, and a path stepping through the running totals to `Q` — alongside the naive `Σ P_i` path landing somewhere else entirely. Real points, real additions, and a text alternative carrying the same facts.
 3. **Rogue Key Attack** — the break that killed naive multisig, run for real. Under naive aggregation the attacker publishes `P_rogue = t·G − ΣP_honest`, signs alone, and **the genuine BIP-340 verifier accepts** — shown as an alarm, not a success. The identical attack against BIP-327 runs the attacker's fixed-point search round by round and misses every time. A third control lets you supply your own rogue key and target secret and submit them to either rule.
-4. **Why Two Nonces** — pick a target aggregate nonce. Against one nonce per signer, the attacker hits it *exactly*, first try, with one subtraction — and therefore chooses the challenge. Against BIP-327's two nonces, the same move misses every round, with the real `b` derived from the bytes the attacker just published. The panel states plainly which part of the Wagner/ROS forgery is shown and which is out of scope.
+4. **Why Two Nonces** — pick a target aggregate nonce. Against one nonce per signer, the attacker hits it *exactly*, first try, with one subtraction — and therefore chooses the challenge. Against BIP-327's two nonces, the same move misses every round, with the real `b` derived from the bytes the attacker just published.
+
+   Then it goes further and **actually forges a signature**. Four concurrent sessions against an honest signer, Wagner's generalised-birthday algorithm over four lists, and out comes a valid signature on a message the honest signer never saw — from four sessions, five signatures. Everything is real secp256k1 (real keys, hash-derived key-aggregation coefficients so the key setup is *not* the flaw, a signing oracle that never reuses a nonce, a real verifier); only the challenge width is reduced. Running the identical attack against two nonces shows why it dies: the k-tree needs a fixed target, and every candidate nonce assignment produces a different one.
 5. **BIP-327 Vectors** — all **56** official BIP-327 known-answer cases from all seven vector files, executed in the browser on load, each expandable to expected-vs-actual. Includes the specification's malformed-input cases, which must be *rejected* for the right reason.
 
 ## When to Use It
@@ -57,7 +66,7 @@ Deep links: `#session`, `#keyagg`, `#rogue`, `#nonce`, `#vectors`.
 ## What Can Go Wrong
 
 - **Rogue keys.** Aggregating by plain summation lets the last signer to publish own the group key outright. Demonstrated end to end in exhibit 3; prevented by the key-aggregation coefficients.
-- **A single nonce per signer.** Makes the aggregate nonce, and therefore the challenge, a value the last signer chooses. Turned into a forgery by Wagner's generalised-birthday algorithm ([Drijvers et al., IEEE S&P 2019](https://eprint.iacr.org/2018/417)) or the polynomial-time ROS attack ([Benhamouda et al., 2020](https://eprint.iacr.org/2020/945)) across concurrent sessions. Exhibit 4 shows the capability and its removal; it does **not** run the k-list search, and says so.
+- **A single nonce per signer.** Makes the aggregate nonce, and therefore the challenge, a value the last signer chooses — and that is enough to forge. Exhibit 4 runs **Wagner's generalised-birthday algorithm** ([Drijvers et al., IEEE S&P 2019](https://eprint.iacr.org/2018/417)) over four concurrent sessions and produces a real forged signature at reduced challenge width, then shows the same attack failing against two nonces. The polynomial-time ROS attack ([Benhamouda et al., 2020](https://eprint.iacr.org/2020/945)) breaks the same schemes without any birthday search but needs ~256 concurrent sessions, so it is named and not implemented.
 - **Nonce reuse.** Signing two different messages with the same secret nonce reveals the private key. `sign()` here zeroes the secret nonce as it consumes it, so a second call fails loudly instead of leaking. The key-recovery algebra itself is demonstrated in [crypto-lab-schnorr-forge](https://systemslibrarian.github.io/crypto-lab-schnorr-forge/).
 - **Key-list order.** `KeyAgg` is order-dependent — the same keys in a different order give a different aggregate key, and a group that disagrees on order derives different keys and cannot sign. BIP-327 defines `KeySort` for exactly this; the toggle in exhibit 1 makes the difference visible.
 - **Malformed contributions.** Keys off the curve, keys with `x ≥ p`, nonces with a bad prefix byte, partial signatures `≥ n`, aggregate nonces that are not points. All fail closed, and all name the offending party — the spec insists a bad contribution be attributable, not merely fatal.
@@ -78,15 +87,16 @@ BIP-327 supersedes the original MuSig2 paper's parameterisation for Bitcoin use 
 ```bash
 npm ci
 npm run dev        # http://localhost:5173/crypto-lab-musig-gate/
-npm test           # 204 unit tests, including the 56 BIP-327 spec KATs
+npm test           # 242 unit tests, including the 56 BIP-327 spec KATs
 npm run build      # tsc --noEmit && vite build
 npm run preview    # serve the production build (the a11y gate serves it on port 4276)
-npm run test:a11y  # the full Playwright suite: axe gate (both themes) + functional flows
+npm run test:a11y  # what CI gates on: axe (both themes) + flows on Chromium desktop & mobile
 npm run test:axe   # just the axe accessibility gate
-npm run test:e2e   # just the functional flows, desktop + mobile viewport
+npm run test:e2e   # just the Chromium flows
+npm run test:e2e:all  # every engine: Chromium, mobile viewport, Firefox, WebKit
 ```
 
-Requires Node 22+. `npm run test:a11y` needs the Playwright Chromium browser once: `npx playwright install chromium`.
+Requires Node 22+. `npm run test:a11y` needs the Playwright Chromium browser once (`npx playwright install chromium`); `npm run test:e2e:all` additionally needs `firefox webkit`.
 
 ## Related Demos
 
@@ -98,7 +108,7 @@ Requires Node 22+. `npm run test:a11y` needs the Playwright Chromium browser onc
 
 ## Build & Verify
 
-**204 unit tests (Vitest), including 56 official BIP-327 known-answer cases** — 30 that must be accepted, 26 that must be rejected — plus **56 end-to-end tests (Playwright)**. All pass.
+**242 unit tests (Vitest), including 56 official BIP-327 known-answer cases** — 30 that must be accepted, 26 that must be rejected — plus **138 end-to-end tests (Playwright)** across four browser engines. All pass.
 
 Spec vectors, verbatim from [bitcoin/bips · bip-0327/vectors](https://github.com/bitcoin/bips/tree/master/bip-0327/vectors):
 
@@ -114,9 +124,11 @@ Spec vectors, verbatim from [bitcoin/bips · bip-0327/vectors](https://github.co
 
 The same runners (`src/musig/vectors.ts`) drive both the Vitest suite and exhibit 5's live table, so a green table in the browser and a green CI run are the same claim.
 
-**End-to-end (Playwright, Chromium on a desktop and a Pixel 5 viewport):** 27 functional flows × 2 viewports assert what the unit suite structurally cannot — that each exhibit renders its result rather than throwing, that alarm-versus-pass semantics actually reach the DOM (a successful forgery must render as `.verdict-alarm`, never `.verdict-pass`), that stepping reveals more of the *same* session rather than resampling it, that the blind pair really is indistinguishable, that a corrupted partial marks exactly one signer, that a malformed rogue key is refused before signing, that the theme toggle persists across a reload, that there is exactly one `<h1>` and one banner landmark, that arrow keys move between tabs, that the scripture line appears verbatim exactly once, and that nothing overflows horizontally at 320px. Every flow also asserts zero uncaught page errors and zero console errors.
+**End-to-end (Playwright):** 34 functional flows across **four engines** — Chromium desktop, a Pixel 5 viewport, Firefox and WebKit — assert what the unit suite structurally cannot — that each exhibit renders its result rather than throwing, that alarm-versus-pass semantics actually reach the DOM (a successful forgery must render as `.verdict-alarm`, never `.verdict-pass`), that stepping reveals more of the *same* session rather than resampling it, that the blind pair really is indistinguishable, that a corrupted partial marks exactly one signer, that a malformed rogue key is refused before signing, that the theme toggle persists across a reload, that there is exactly one `<h1>` and one banner landmark, that arrow keys move between tabs, that the scripture line appears verbatim exactly once, and that nothing overflows horizontally at 320px. The Wagner forgery has its own flows: it must render as `.verdict-alarm`, `Σ e_j` must match `e*` exactly, and the two-nonce attempt must produce a distinct target for every probe. Every flow also asserts zero uncaught page errors and zero console errors.
 
-Beyond the KATs, the unit suite covers: full 2-, 3-, 4- and 5-signer round trips verified by two independent verifiers; the algebraic identity `s_i = k_i1 + b·k_i2 + e·a_i·d_i` checked per signer; `Σ s_i` equal to the signature's `s`; secnonce consumption (a second `sign()` throws); refusal to sign with a mismatched key, an out-of-range key, or for a key list the signer is not in; rejection of a negated partial, a wrong-signer partial, and an out-of-range partial; single-bit tamper detection with correct attribution; the n-of-n boundary; the infinity-fallback and empty-message edge cases; the naive rogue-key attack **succeeding**; the BIP-327 rogue-key attack **failing**; single-nonce target-hitting **succeeding**; and two-nonce target-hitting **failing**. The lone-signer comparison is tested both ways: indistinguishable in shape for 2–5 signers, and *not* interchangeable in substance (neither signature verifies under the other's key), with the coin flip shown to reach both slots.
+Two workflows, for one reason: `deploy.yml` must stay byte-for-byte identical across the fleet and it installs only Chromium, so Firefox and WebKit cannot run inside it. `.github/workflows/e2e.yml` installs all three engines and runs the full matrix on every push and pull request, while `deploy.yml`'s gate step runs axe plus the Chromium flows. The Chromium projects therefore run in both places, deliberately.
+
+Beyond the KATs, the unit suite covers: full 2-, 3-, 4- and 5-signer round trips verified by two independent verifiers; the algebraic identity `s_i = k_i1 + b·k_i2 + e·a_i·d_i` checked per signer; `Σ s_i` equal to the signature's `s`; secnonce consumption (a second `sign()` throws); refusal to sign with a mismatched key, an out-of-range key, or for a key list the signer is not in; rejection of a negated partial, a wrong-signer partial, and an out-of-range partial; single-bit tamper detection with correct attribution; the n-of-n boundary; the infinity-fallback and empty-message edge cases; the naive rogue-key attack **succeeding**; the BIP-327 rogue-key attack **failing**; single-nonce target-hitting **succeeding**; and two-nonce target-hitting **failing**. The Wagner module is tested on the unusual requirement that an attack must *succeed*: the forged signature verifies, the honest signer provably never saw the forged message, no nonce was reused (its oracle throws on reuse, so a nonce-reuse key leak cannot be masquerading as the k-sum), and `Σ e_j = e*` over the integers rather than merely modulo 2^bits — plus soundness of the k-tree itself, which must return `null` rather than an inexact answer. The drawable group is tested on the group axioms (closure, associativity, inverses, identity), its stated order of 127, and that its generator enumerates all 127 elements — if any of those failed, the picture would be a lie. The lone-signer comparison is tested both ways: indistinguishable in shape for 2–5 signers, and *not* interchangeable in substance (neither signature verifies under the other's key), with the coin flip shown to reach both slots.
 
 **Accessibility gate:** `@axe-core/playwright` scans the production build for WCAG 2.1 A/AA violations in **both** themes, driving all five exhibits into their post-interaction states first — every step revealed, both attacks run in both modes, the malformed-input rejection path, the tamper and missing-signer failures, and every disclosure and learner check opened. Zero violations required.
 
@@ -133,6 +145,9 @@ Everything runs client-side with JavaScript `BigInt` arithmetic, so scalar multi
 | Full 5-signer session + complete panel render | **~76 ms** |
 | Same session measured in isolation, Node (no DOM) | ~207 ms for 5 signers, ~59 ms for 2 |
 | All 56 BIP-327 vectors + table render | **~224 ms** |
+| Wagner forgery, 27-bit challenge, 4 lists of 2,048 | **~420 ms** (~8,200 point additions) |
+| Wagner forgery, 24-bit challenge | ~290 ms |
+| The drawable group: 126 points + aggregation + plot | under 5 ms |
 
 A 5-signer session performs roughly 40 scalar multiplications (10 nonce points, 5 key-aggregation contributions, 5 partial-signature self-checks, 5 partial verifications at 3 each, plus two full verifications), which is why the cost scales visibly with the signer count and why the Node figure — which repeats the whole protocol on the same signer set without any render caching — is the higher one. Sub-quarter-second is well inside "feels instant" for a click, which is why exhibit 5 runs the entire vector suite on every page load rather than shipping a cached result.
 

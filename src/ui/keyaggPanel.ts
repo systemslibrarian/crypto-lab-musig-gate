@@ -35,10 +35,15 @@ import {
 } from '../musig/field.js';
 import { type PlainPk, keyAggWithTrace } from '../musig/keyagg.js';
 import { naiveKeyAgg } from '../musig/naive.js';
+import { type ToyPoint, randomToyPoints, toyAggregate, toyEquals } from '../musig/toycurve.js';
+import { curvePlot } from './curvePlot.js';
 
 export function renderKeyAggPanel(root: HTMLElement): void {
   let keys: PlainPk[] = freshKeys(3);
+  let toyPoints = randomToyPoints(3);
+  let showNaive = true;
   const output = h('div', { class: 'output', role: 'status', 'aria-live': 'polite' });
+  const plotOut = h('div', { class: 'output' });
 
   const countLabel = h('span', { class: 'range-value' }, String(keys.length));
   const countInput = h('input', {
@@ -50,9 +55,12 @@ export function renderKeyAggPanel(root: HTMLElement): void {
     value: String(keys.length),
   }) as HTMLInputElement;
   countInput.addEventListener('input', () => {
-    keys = freshKeys(Number(countInput.value));
+    const n = Number(countInput.value);
+    keys = freshKeys(n);
+    toyPoints = randomToyPoints(n);
     countLabel.textContent = countInput.value;
     render();
+    renderPlot();
   });
 
   root.append(
@@ -75,7 +83,16 @@ export function renderKeyAggPanel(root: HTMLElement): void {
         { class: 'action-row' },
         h(
           'button',
-          { type: 'button', class: 'btn btn-primary', onclick: () => { keys = freshKeys(keys.length); render(); } },
+          {
+            type: 'button',
+            class: 'btn btn-primary',
+            onclick: () => {
+              keys = freshKeys(keys.length);
+              toyPoints = randomToyPoints(keys.length);
+              render();
+              renderPlot();
+            },
+          },
           'New key set',
         ),
         h(
@@ -104,7 +121,110 @@ export function renderKeyAggPanel(root: HTMLElement): void {
       ),
     ),
     output,
+    h(
+      'section',
+      { class: 'compare-block curve-section' },
+      h('h3', {}, 'See it on a curve you can actually see'),
+      h(
+        'p',
+        { class: 'help' },
+        'Everything above is 256-bit hex, which is honest but unreadable. Below is the same construction on the same curve equation — y² = x³ + 7 — over a 7-bit prime instead of a 256-bit one, so the entire group is 127 elements and fits on screen.',
+      ),
+      h(
+        'p',
+        { class: 'help' },
+        'This is not the smooth curve from textbooks. That picture is the equation over the real numbers, which is a different object from the finite group the cryptography happens in — drawing point addition on it would teach something false. Every dot here is a real solution, and every step is a real addition.',
+      ),
+      h(
+        'div',
+        { class: 'action-row' },
+        h(
+          'button',
+          {
+            type: 'button',
+            class: 'btn btn-ghost',
+            onclick: () => {
+              toyPoints = randomToyPoints(keys.length);
+              renderPlot();
+            },
+          },
+          'New points on the small curve',
+        ),
+        h(
+          'button',
+          {
+            type: 'button',
+            class: 'btn btn-ghost',
+            onclick: () => {
+              showNaive = !showNaive;
+              renderPlot();
+            },
+          },
+          'Toggle the naive Σ P_i path',
+        ),
+      ),
+      plotOut,
+    ),
   );
+
+  function renderPlot(): void {
+    clear(plotOut);
+    const agg = toyAggregate(toyPoints);
+    plotOut.append(
+      curvePlot(agg, { showNaive }),
+      scrollRegion(
+        'Aggregation on the small curve, as numbers',
+        h(
+          'table',
+          { class: 'kat-table' },
+          h(
+            'thead',
+            {},
+            h(
+              'tr',
+              {},
+              h('th', { scope: 'col' }, '#'),
+              h('th', { scope: 'col' }, 'Key P_i'),
+              h('th', { scope: 'col' }, 'a_i'),
+              h('th', { scope: 'col' }, 'a_i·P_i'),
+              h('th', { scope: 'col' }, 'Running total'),
+            ),
+          ),
+          h(
+            'tbody',
+            {},
+            ...agg.rows.map((row) =>
+              h(
+                'tr',
+                {},
+                h('th', { scope: 'row' }, String(row.index + 1)),
+                h('td', {}, pointText(row.point)),
+                h('td', {}, String(row.coeff)),
+                h('td', {}, pointText(row.weighted)),
+                h('td', {}, pointText(row.runningTotal)),
+              ),
+            ),
+          ),
+        ),
+      ),
+      field('Weighted aggregate Q = Σ a_i·P_i', pointText(agg.aggregate), { mono: false }),
+      field('Naive aggregate Σ P_i', pointText(agg.naiveAggregate), {
+        mono: false,
+        sub: 'the forgeable one',
+      }),
+      verdict(
+        toyEquals(agg.aggregate, agg.naiveAggregate) ? 'alarm' : 'pass',
+        toyEquals(agg.aggregate, agg.naiveAggregate)
+          ? 'the two rules coincided for this key set — possible in a 127-element group, and exactly why the real one is 2^256'
+          : 'the coefficients moved the aggregate somewhere else entirely — the same effect the hex above shows, now visible',
+        toyEquals(agg.aggregate, agg.naiveAggregate) ? 'Collided' : 'Different',
+      ),
+      note(
+        'caveat',
+        'A 127-element group has no security at all: you could find any private key by counting to 127. Only the picture is small — the arithmetic, the group law and the shape of the aggregation are the real ones. Coefficients here come from a small non-cryptographic hash, because there is nothing for SHA-256 to do modulo 127; the specification-exact version is what the table at the top of this panel shows.',
+      ),
+    );
+  }
 
   function render(): void {
     clear(output);
@@ -173,7 +293,7 @@ export function renderKeyAggPanel(root: HTMLElement): void {
       }),
       scrollRegion('Key-aggregation coefficients', table),
       bothSides(
-        'The definition, checked rather than asserted — Q is recomputed here from the coefficients above:',
+        'The definition, checked rather than asserted — Q is recomputed here from the coefficients above and compared byte for byte:',
         { label: 'Σ a_i·P_i (recomputed)', value: bytesToHex(xbytes(weighted)) },
         { label: 'Q from KeyAgg', value: trace.aggregateX },
       ),
@@ -238,6 +358,11 @@ export function renderKeyAggPanel(root: HTMLElement): void {
   }
 
   render();
+  renderPlot();
+}
+
+function pointText(pt: ToyPoint): string {
+  return pt === null ? '∞ (the point at infinity)' : `(${pt.x}, ${pt.y})`;
 }
 
 function freshKeys(count: number): PlainPk[] {

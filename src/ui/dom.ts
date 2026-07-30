@@ -143,7 +143,7 @@ export function bothSides(
     field(right.label, right.value),
     verdict(
       equal ? 'pass' : 'fail',
-      equal ? 'the two sides are byte-for-byte identical' : 'the two sides differ',
+      equal ? 'the two sides match exactly' : 'the two sides differ',
       equal ? 'Match' : 'Mismatch',
     ),
   );
