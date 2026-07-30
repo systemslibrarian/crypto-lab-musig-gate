@@ -96,24 +96,36 @@ if (byteHost) byteHost.append(byteModeControl());
  * The guided tour sits above the tabs and drives them. It is mounted before the
  * initial tab selection so a resumed tour can take over from the default panel.
  */
+/**
+ * Captured before the tour mounts, because mounting renders, rendering reports
+ * progress, and reporting progress rewrites the hash — which would destroy an
+ * incoming `#step-6` before anything had a chance to read it.
+ */
+const initialHash = location.hash;
+let routed = false;
+
 const tourHost = document.getElementById('tour-host');
-if (tourHost) {
-  mountTour(
-    tourHost,
-    selectTab,
-    () => {
-      // "Start over" means the whole lesson, not one panel: drop recorded predictions
-      // and re-render every exhibit from scratch.
-      resetPredictions();
-      for (const key of rendered) {
-        const el = panelEl(key);
-        el.replaceChildren();
-        renderers[key](el);
-      }
-    },
-    markTourProgress,
-  );
-}
+const tour = tourHost
+  ? mountTour(
+      tourHost,
+      selectTab,
+      () => {
+        // "Start over" means the whole lesson, not one panel: drop recorded predictions
+        // and re-render every exhibit from scratch.
+        resetPredictions();
+        for (const key of rendered) {
+          const el = panelEl(key);
+          el.replaceChildren();
+          renderers[key](el);
+        }
+      },
+      (progress) => {
+        markTourProgress(progress);
+        // Not before the initial route: see `initialHash`.
+        if (routed) syncHash(progress);
+      },
+    )
+  : null;
 
 /**
  * While the tour runs, the tab strip becomes the lesson map: exhibits whose stops are
@@ -139,13 +151,49 @@ function markTourProgress(progress: TourProgress): void {
   }
 }
 
-/** #keyagg / #rogue / #nonce / #vectors deep-link straight to an exhibit. */
-function openFromHash(): boolean {
-  const key = location.hash.replace(/^#/, '') as PanelKey;
+/**
+ * Two kinds of deep link.
+ *
+ *   #rogue    — open an exhibit, for someone who wants that one thing.
+ *   #step-4   — start the lesson at a stop, for someone teaching from it.
+ *
+ * The second is the reason the tour returns a controller at all. Being able to send
+ * "read step 6" and have it open on step 6 is most of what makes a guided lesson
+ * usable by a third party, and the alternative — "press Continue five times" — is
+ * the kind of instruction that quietly does not get followed.
+ */
+const STEP_HASH = /^#step-(\d+)$/;
+
+function openFromHash(hash: string = location.hash): boolean {
+  const step = STEP_HASH.exec(hash);
+  if (step && tour) {
+    // 1-based in the URL because the interface counts stops from 1.
+    tour.goto(Number(step[1]) - 1);
+    return true;
+  }
+  const key = hash.replace(/^#/, '') as PanelKey;
   if (!(key in renderers)) return false;
   selectTab(key);
   return true;
 }
 
-if (!openFromHash()) selectTab('session');
-window.addEventListener('hashchange', openFromHash);
+/**
+ * Keep the address bar on the current stop so copying the URL mid-lesson shares that
+ * stop rather than the beginning.
+ *
+ * `replaceState`, not a hash assignment: ten Continues should not put ten entries in
+ * the back button, and assigning `location.hash` would re-enter `openFromHash` and
+ * fight the navigation that just happened.
+ */
+function syncHash(progress: TourProgress): void {
+  const want = progress.active ? `#step-${progress.index + 1}` : '';
+  const current = location.hash;
+  if (want === current) return;
+  // Leaving the lesson should not clobber an exhibit deep link the user typed.
+  if (!want && !STEP_HASH.test(current)) return;
+  history.replaceState(null, '', want || location.pathname + location.search);
+}
+
+if (!openFromHash(initialHash)) selectTab('session');
+routed = true;
+window.addEventListener('hashchange', () => openFromHash());

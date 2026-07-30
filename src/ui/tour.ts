@@ -20,7 +20,7 @@
  * Progress lives in sessionStorage so a reload mid-lesson does not lose the thread,
  * and dies with the tab so the next visitor starts fresh.
  */
-import { clear, h, scrollIntoCentre } from './dom.js';
+import { clear, copyButton, h, scrollIntoCentre } from './dom.js';
 
 export type PanelKey = 'session' | 'keyagg' | 'rogue' | 'nonce' | 'vectors';
 
@@ -168,11 +168,9 @@ function save(state: TourState): void {
 export interface TourController {
   start(): void;
   stop(): void;
+  /** Jump to a stop by index. Out-of-range values are clamped, not rejected. */
   goto(index: number): void;
   next(): void;
-  isActive(): boolean;
-  /** Jump straight to the stop that sits on a given anchor, if the tour is running. */
-  focusAnchor(anchor: string): void;
 }
 
 /**
@@ -185,6 +183,8 @@ export interface TourController {
  */
 export interface TourProgress {
   active: boolean;
+  /** Zero-based index of the current stop, so a caller can render or link to it. */
+  index: number;
   current: PanelKey | null;
   done: Set<PanelKey>;
 }
@@ -199,6 +199,7 @@ function progressAt(state: TourState): TourProgress {
   }
   return {
     active: state.active,
+    index: state.index,
     current: state.active ? TOUR[state.index].panel : null,
     done,
   };
@@ -252,6 +253,10 @@ export function mountTour(
           'Start over',
         ),
         h('button', { type: 'button', class: 'btn btn-ghost', onclick: () => stop() }, 'Exit tour'),
+        // The address bar already tracks the stop, but nobody thinks to look there.
+        // This is for teaching from the lab: send someone a link that opens on the
+        // step you want them to read, rather than "press Continue five times".
+        copyButton(() => location.href, { label: 'Copy a link to this step' }, 'Link to this step'),
       ),
     ),
     blurb,
@@ -371,15 +376,5 @@ export function mountTour(
   render();
   if (state.active) reveal();
 
-  return {
-    start,
-    stop,
-    goto,
-    next,
-    isActive: () => state.active,
-    focusAnchor(anchor: string) {
-      const i = TOUR.findIndex((s) => s.anchor === anchor);
-      if (i >= 0) goto(i);
-    },
-  };
+  return { start, stop, goto, next };
 }

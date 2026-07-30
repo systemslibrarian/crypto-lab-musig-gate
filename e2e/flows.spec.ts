@@ -528,6 +528,26 @@ test.describe('the byte-display switch', () => {
     await expect(copies).toHaveCount(2);
     await expect(copies.first()).toHaveAccessibleName(/^Copy /);
   });
+
+  test('copying an abbreviated value yields the whole value', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'flows-desktop', 'clipboard permissions are Chromium-only');
+    await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+    await page.goto('.');
+    await btn(page, '#panel-session', 'Show all steps').click();
+
+    // The whole point of the pairing: the page shows 25 characters, the clipboard
+    // gets all 64. Copying what is on screen would be quietly useless.
+    const field = page.locator('#panel-session .value-with-copy').first();
+    const shown = (await field.locator('code').innerText()).trim();
+    const full = await field.locator('code').getAttribute('data-hex-full');
+    expect(shown).not.toBe(full);
+    expect(shown).toContain('…');
+
+    await field.getByRole('button').click();
+    const clipped = await page.evaluate(() => navigator.clipboard.readText());
+    expect(clipped).toBe(full);
+    expect(clipped).toHaveLength(64);
+  });
 });
 
 test.describe('the guided tour', () => {
@@ -749,6 +769,93 @@ test.describe('the tab strip is the lesson map', () => {
       await expect(page.locator('#tab-vectors')).toHaveAttribute('aria-selected', 'false');
       await btn(page, '#tour-bar', 'Continue').click();
     }
+  });
+});
+
+test.describe('linking into the lesson', () => {
+  test('#step-N opens the tour on that stop', async ({ page }) => {
+    await page.goto('./#step-6');
+    await expect(page.locator('#tour-bar')).toBeVisible();
+    await expect(page.locator('.tour-label')).toContainText('Step 6 of 10');
+    await expect(page.locator('.tour-label')).toContainText('See what a coefficient does');
+    // It really navigated, not just relabelled: stop 6 lives in another exhibit.
+    await expect(page.locator('#tab-keyagg')).toHaveAttribute('aria-selected', 'true');
+    await expect(page.locator('#tour-keyagg-drawn')).toBeVisible();
+  });
+
+  test('an incoming step survives a stored lesson at a different stop', async ({ page }) => {
+    // The tour rewrites the hash whenever it renders, and it renders while mounting —
+    // so a resumed lesson would overwrite the requested step before anything read it.
+    await page.goto('.');
+    await btn(page, '#tour-invite', 'Start the guided tour').click();
+    await btn(page, '#tour-bar', 'Continue').click();
+    await expect(page.locator('.tour-label')).toContainText('Step 2 of 10');
+
+    await page.goto('./#step-9');
+    await expect(page.locator('.tour-label')).toContainText('Step 9 of 10');
+    expect(page.url()).toContain('#step-9');
+  });
+
+  test('the address bar follows the lesson, without flooding the back button', async ({ page }) => {
+    await page.goto('.');
+    await btn(page, '#tour-invite', 'Start the guided tour').click();
+    await expect(page).toHaveURL(/#step-1$/);
+    const entries = await page.evaluate(() => history.length);
+    for (let i = 0; i < 3; i++) await btn(page, '#tour-bar', 'Continue').click();
+    await expect(page).toHaveURL(/#step-4$/);
+    // replaceState, not four new history entries: Back still leaves the lab rather
+    // than stepping backwards through the lesson one stop at a time.
+    expect(await page.evaluate(() => history.length)).toBe(entries);
+  });
+
+  test('leaving the tour clears the step from the URL', async ({ page }) => {
+    await page.goto('./#step-3');
+    await expect(page).toHaveURL(/#step-3$/);
+    await btn(page, '#tour-bar', 'Exit tour').click();
+    expect(page.url()).not.toContain('#step-');
+  });
+
+  test('an exhibit deep link is left alone when the tour never runs', async ({ page }) => {
+    await page.goto('./#rogue');
+    await expect(page.locator('#tab-rogue')).toHaveAttribute('aria-selected', 'true');
+    await page.locator('#tab-nonce').click();
+    // Only the tour writes to the hash, and it is not running.
+    expect(page.url()).toContain('#rogue');
+  });
+
+  test('an out-of-range step clamps to the last one', async ({ page }) => {
+    await page.goto('./#step-999');
+    await expect(page.locator('.tour-label')).toContainText('Step 10 of 10');
+  });
+
+  test('a nonsense hash falls back to the default exhibit', async ({ page }) => {
+    const errors = noPageErrors(page);
+    await page.goto('.');
+    // A separate navigation, because a lesson resumed from sessionStorage would
+    // legitimately show the bar and mask the fallback being tested.
+    await page.evaluate(() => sessionStorage.clear());
+    await page.goto('./#step-banana');
+    await expect(page.locator('#tab-session')).toHaveAttribute('aria-selected', 'true');
+    await expect(page.locator('#tour-bar')).toBeHidden();
+    expect(errors).toEqual([]);
+  });
+
+  test('the tour offers the link rather than hiding it in the address bar', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'flows-desktop', 'clipboard permissions are Chromium-only');
+    await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+    await page.goto('./#step-5');
+    // By accessible name, NOT by visible text: the button relabels itself to
+    // "Copied", and a hasText locator would stop matching at exactly the moment the
+    // assertion needs it — it silently waits for the label to revert and passes on
+    // the pre-click text instead.
+    const copy = page.getByRole('button', { name: 'Copy a link to this step' });
+    await expect(copy).toBeVisible();
+    await expect(copy).toHaveText('Link to this step');
+    await copy.click();
+    await expect(copy).toHaveText('Copied');
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toContain('#step-5');
+    // And it goes back, so the control does not look permanently spent.
+    await expect(copy).toHaveText('Link to this step', { timeout: 3000 });
   });
 });
 

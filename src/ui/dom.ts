@@ -204,8 +204,9 @@ export function field(
 export function copyButton(
   getText: () => string,
   opts: { label?: string } = {},
+  visibleText = 'Copy',
 ): HTMLButtonElement {
-  const base = 'Copy';
+  const base = visibleText;
   const btn = h(
     'button',
     { type: 'button', class: 'btn btn-ghost copy-btn', 'aria-label': opts.label ?? base },
