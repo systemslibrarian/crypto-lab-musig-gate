@@ -12,7 +12,9 @@
     "test:a11y": "playwright test --project=a11y --project=flows-desktop --project=flows-mobile",
     "test:e2e": "playwright test --project=flows-desktop --project=flows-mobile",
     "test:axe": "playwright test --project=a11y",
-    "test:e2e:all": "playwright test"
+    "test:e2e:all": "playwright test",
+    "bench": "vitest bench --run",
+    "perf": "npm run build && node scripts/perf.mjs"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.12.1",

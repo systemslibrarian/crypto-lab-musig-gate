@@ -122,6 +122,8 @@ BIP-327 supersedes the original MuSig2 paper's parameterisation for Bitcoin use 
 npm ci
 npm run dev        # http://localhost:5173/crypto-lab-musig-gate/
 npm test           # 254 unit tests, including the 56 BIP-327 spec KATs
+npm run bench      # the protocol with no DOM, for the performance table
+npm run perf       # the browser figures, against the production build
 npm run build      # tsc --noEmit && vite build
 npm run preview    # serve the production build (the a11y gate serves it on port 4276)
 npm run test:a11y  # what CI gates on: axe (both themes) + flows on Chromium desktop & mobile
@@ -174,21 +176,30 @@ Colour choices are checked rather than eyeballed: every text/background pair in 
 
 ## Performance
 
-Everything runs client-side with JavaScript `BigInt` arithmetic, so scalar multiplication dominates everything else. Measured on an Apple-silicon laptop, Chromium:
+Everything runs client-side with JavaScript `BigInt` arithmetic, so scalar multiplication dominates everything else. Both halves of this table are reproducible — `npm run perf` for the browser figures and `npm run bench` for the no-DOM ones — because a published performance number is worth what its methodology is worth.
 
-| Operation | Time |
-| --- | --- |
-| Full 5-signer session + complete panel render | **~76 ms** |
-| Same session measured in isolation, Node (no DOM) | ~207 ms for 5 signers, ~59 ms for 2 |
-| All 56 BIP-327 vectors + table render | **~224 ms** |
-| Wagner forgery, 27-bit challenge, 4 lists of 2,048 | **~420 ms** (~8,200 point additions) |
-| Wagner forgery, 24-bit challenge | ~290 ms |
-| **ROS forgery, full 256-bit challenge, 256 sessions** | **~495 ms** (257 scalar multiplications, no search) |
-| The drawable group: 126 points + aggregation + plot | under 5 ms |
+Measured on an Apple M5 (10 cores), Chromium, against the production build served by `vite preview`: median of 11 runs on a fresh page each time, two discarded as warm-up, timing the synchronous work between the click and the result. `npm run perf` refuses to report if the machine is under load, which is not pedantry — a first attempt at these numbers, taken while the test suites were running, spread a single row across 121–245 ms.
 
-A 5-signer session performs roughly 40 scalar multiplications (10 nonce points, 5 key-aggregation contributions, 5 partial-signature self-checks, 5 partial verifications at 3 each, plus two full verifications), which is why the cost scales visibly with the signer count and why the Node figure — which repeats the whole protocol on the same signer set without any render caching — is the higher one. Sub-quarter-second is well inside "feels instant" for a click, which is why exhibit 5 runs the entire vector suite on every page load rather than shipping a cached result.
+| Operation | Time | Spread over runs |
+| --- | ---: | ---: |
+| Full 2-signer session + complete panel render | **~31 ms** | 30.9–31.5 ms |
+| Full 3-signer session + complete panel render | **~49 ms** | 48.8–50.1 ms |
+| Full 5-signer session + complete panel render | **~97 ms** | 96.1–98.2 ms |
+| All 56 BIP-327 vectors + table render | **~215 ms** | 214–217 ms |
+| Rogue-key attack: forge, then 6 fixed-point rounds | **~2.6 ms** | 2.5–2.8 ms |
+| The drawable group: 126 points + aggregation + plot | **~0.4 ms** | 0.3–0.5 ms |
+| Wagner forgery, 24-bit challenge | **~192 ms** | 186–200 ms |
+| Wagner forgery, 27-bit challenge | **~412 ms** | 404–470 ms |
+| Wagner forgery, 30-bit challenge | **~941 ms** | 923–1407 ms |
+| **ROS forgery, full 256-bit challenge, 256 sessions** | **~186 ms** | 183–188 ms |
 
-These are interactive-responsiveness figures and they move with the machine and its load: re-measuring the same build on a busy laptop spread one row across 121–245 ms. Treat the column as orders of magnitude, not benchmarks. The two forgery rows do not need trusting at all — **the page times itself and prints the figure**, so the number you see is the one your own hardware produced.
+The four forgery rows are the ones you need trust for least: **the page times itself and prints the figure**, and the harness simply reads what a visitor would see. Their spread is wider because Wagner runs a birthday search — a stochastic algorithm genuinely takes a different length of time each run, and a row whose min and max sit close together would be the suspicious one.
+
+The same protocol with no DOM at all (`npm run bench`, Vitest, mean of 10): **73 ms for 2 signers, 122 ms for 3, 256 ms for 5.** Higher than the browser column because `runSession` repeats the entire protocol on every call with nothing cached, which is what the page pays when you press `New keys` — and because the browser row is measured on Chromium's V8 rather than Node's.
+
+A 5-signer session performs roughly 40 scalar multiplications (10 nonce points, 5 key-aggregation contributions, 5 partial-signature self-checks, 5 partial verifications at 3 each, plus two full verifications), which is why the cost scales visibly with the signer count. Sub-quarter-second is well inside "feels instant" for a click, which is why exhibit 5 runs the entire vector suite on every page load rather than shipping a cached result.
+
+Re-measuring found a real regression, which is the argument for having the harness at all. Every partial signature was having both sides of its group equation computed twice — once when the record was built, then again after the tamper path could have replaced the scalar — and the second result overwrote the first every single time. That dead scalar multiplication cost about a fifth of every session: 5 signers went from 319 ms to 256 ms with no DOM, and 117 ms to 97 ms in the browser, once it was computed only where it was used.
 
 None of this arithmetic is constant-time and **no timing property should be inferred from these numbers** — they describe interactive responsiveness, not side-channel resistance.
 

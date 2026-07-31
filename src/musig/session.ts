@@ -55,6 +55,15 @@ export interface PartialRecord {
   sides: PartialSigSides;
 }
 
+/**
+ * A partial signature before the aggregator has checked it.
+ *
+ * Split out so the two verification-derived fields cannot be computed early and
+ * then silently recomputed: they depend on the scalar that is actually aggregated,
+ * which the tamper path can change.
+ */
+type PartialDraft = Omit<PartialRecord, 'verified' | 'sides'>;
+
 export interface SessionResult {
   message: string;
   messageDigest: string; // the 32 bytes actually signed
@@ -145,19 +154,20 @@ export function runSession(
   const sv = getSessionValues(session);
 
   // --- Round 2: partial signatures ----------------------------------------
-  const round2: PartialRecord[] = ordered.map((s, i) => {
+  //
+  // `sides` and `verified` are deliberately NOT filled in here. Both have to be
+  // computed against the scalar that is actually aggregated, and the tamper path
+  // below can replace one — so computing them now means computing them again after,
+  // and `partialSigSides` is scalar multiplication, not bookkeeping. Doing it in
+  // both places cost about a third of the whole session for a value that was
+  // overwritten every single time.
+  const drafts: PartialDraft[] = ordered.map((s, i) => {
     // `sign` consumes the secnonce, so hand it the array it may zero out.
     const { psig, trace } = sign(nonces[i].secnonce, s.secretKey, session);
-    return {
-      label: s.label,
-      psigHex: bytesToHex(psig),
-      trace,
-      verified: false,
-      sides: partialSigSides(psig, pubnonces[i], pubkeys[i], session),
-    };
+    return { label: s.label, psigHex: bytesToHex(psig), trace };
   });
 
-  let psigs = round2.map((r) => hexToBytes(r.psigHex));
+  let psigs = drafts.map((r) => hexToBytes(r.psigHex));
   if (opts.tamperIndex != null) {
     const i = opts.tamperIndex;
     if (i < 0 || i >= psigs.length) throw new Error('tamperIndex out of range');
@@ -165,17 +175,18 @@ export function runSession(
     const bad = psigs[i].slice();
     bad[31] ^= 0x01;
     psigs = psigs.map((p, j) => (j === i ? bad : p));
-    round2[i] = { ...round2[i], psigHex: bytesToHex(bad) };
+    drafts[i] = { ...drafts[i], psigHex: bytesToHex(bad) };
   }
 
   // The aggregator verifies each partial BEFORE combining, which is what makes a
-  // failure attributable to a signer rather than to "the session".
-  for (let i = 0; i < round2.length; i++) {
-    round2[i].verified = partialSigVerify(psigs[i], pubnonces, pubkeys, msg, i);
-    // Recomputed against the possibly-tampered scalar, so a corrupted partial
-    // shows its two sides actually differing rather than a bare "false".
-    round2[i].sides = partialSigSides(psigs[i], pubnonces[i], pubkeys[i], session);
-  }
+  // failure attributable to a signer rather than to "the session". Both values are
+  // computed here, against the possibly-tampered scalar, so a corrupted partial
+  // shows its two sides actually differing rather than a bare "false".
+  const round2: PartialRecord[] = drafts.map((d, i) => ({
+    ...d,
+    verified: partialSigVerify(psigs[i], pubnonces, pubkeys, msg, i),
+    sides: partialSigSides(psigs[i], pubnonces[i], pubkeys[i], session),
+  }));
 
   // --- Aggregate and verify with a plain BIP-340 verifier ------------------
   const { sig, trace: aggTrace } = partialSigAgg(psigs, session);
