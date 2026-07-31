@@ -138,6 +138,15 @@ export interface PartialSignResult {
   trace: PartialSignTrace;
 }
 
+// Every round-2 entry point below takes an optional, already-derived `values`.
+//
+// `getSessionValues` re-runs the WHOLE key aggregation — one scalar multiplication
+// per signer — and it is identical for every signer in a session. A caller that
+// signs and verifies u partials therefore pays O(u²) scalar multiplications for a
+// value it could compute once. The parameter costs nothing to ignore, and the
+// public, spec-shaped `partialSigVerify` still derives its own context exactly as
+// BIP-327 describes; this is for callers holding a whole session at once.
+
 /**
  * BIP-327 Sign. `secnonce` is CONSUMED: its 64 secret bytes are zeroed before
  * returning, so a second call with the same object fails loudly instead of
@@ -145,8 +154,14 @@ export interface PartialSignResult {
  * important safety property in the whole file — nonce reuse across two different
  * messages leaks the secret key by simple algebra.
  */
-export function sign(secnonce: SecNonce, sk: Uint8Array, session: SessionContext): PartialSignResult {
-  const { Q, gacc, b, R, e } = getSessionValues(session);
+export function sign(
+  secnonce: SecNonce,
+  sk: Uint8Array,
+  session: SessionContext,
+  values?: SessionValues,
+): PartialSignResult {
+  const sv = values ?? getSessionValues(session);
+  const { Q, gacc, b, R, e } = sv;
 
   const k1Raw = bytesToBig(secnonce.subarray(0, 32));
   const k2Raw = bytesToBig(secnonce.subarray(32, 64));
@@ -179,7 +194,7 @@ export function sign(secnonce: SecNonce, sk: Uint8Array, session: SessionContext
   // that would not verify, or a faulty signer becomes indistinguishable from an
   // attacker and the session cannot be attributed.
   const pubnonce = concatBytes(cbytes(mul(G, k1Raw)), cbytes(mul(G, k2Raw)));
-  if (!partialSigVerifyInternal(psig, pubnonce, pk, session)) {
+  if (!partialSigVerifyInternal(psig, pubnonce, pk, session, sv)) {
     throw new Error('internal error: produced partial signature does not verify');
   }
 
@@ -214,8 +229,9 @@ export function partialSigVerifyInternal(
   pubnonce: PubNonce,
   pk: PlainPk,
   session: SessionContext,
+  values?: SessionValues,
 ): boolean {
-  const { Q, gacc, b, R, e } = getSessionValues(session);
+  const { Q, gacc, b, R, e } = values ?? getSessionValues(session);
   const s = bytesToBig(psig);
   if (psig.length !== 32 || s >= N) return false;
   const Rs1 = cpoint(pubnonce.subarray(0, 33));
@@ -248,8 +264,9 @@ export function partialSigSides(
   pubnonce: PubNonce,
   pk: PlainPk,
   session: SessionContext,
+  values?: SessionValues,
 ): PartialSigSides {
-  const { Q, gacc, b, R, e } = getSessionValues(session);
+  const { Q, gacc, b, R, e } = values ?? getSessionValues(session);
   const s = bytesToBig(psig);
   const Rs1 = cpoint(pubnonce.subarray(0, 33));
   const Rs2 = cpoint(pubnonce.subarray(33, 66));
@@ -297,8 +314,9 @@ export interface PartialSigAggTrace {
 export function partialSigAgg(
   psigs: Uint8Array[],
   session: SessionContext,
+  values?: SessionValues,
 ): { sig: Uint8Array; trace: PartialSigAggTrace } {
-  const { Q, tacc, R, e } = getSessionValues(session);
+  const { Q, tacc, R, e } = values ?? getSessionValues(session);
   const terms: bigint[] = [];
   let s = 0n;
   for (let i = 0; i < psigs.length; i++) {

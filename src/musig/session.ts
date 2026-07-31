@@ -35,7 +35,7 @@ import {
   getSessionValues,
   partialSigAgg,
   partialSigSides,
-  partialSigVerify,
+  partialSigVerifyInternal,
   sign,
 } from './sign.js';
 
@@ -163,7 +163,7 @@ export function runSession(
   // overwritten every single time.
   const drafts: PartialDraft[] = ordered.map((s, i) => {
     // `sign` consumes the secnonce, so hand it the array it may zero out.
-    const { psig, trace } = sign(nonces[i].secnonce, s.secretKey, session);
+    const { psig, trace } = sign(nonces[i].secnonce, s.secretKey, session, sv);
     return { label: s.label, psigHex: bytesToHex(psig), trace };
   });
 
@@ -182,14 +182,20 @@ export function runSession(
   // failure attributable to a signer rather than to "the session". Both values are
   // computed here, against the possibly-tampered scalar, so a corrupted partial
   // shows its two sides actually differing rather than a bare "false".
+  //
+  // `partialSigVerifyInternal` with the session values we already hold, rather than
+  // the public `partialSigVerify`, which re-derives them from raw pubnonces and
+  // pubkeys. Identical arithmetic and an identical answer — the public entry point
+  // exists for a verifier who has only the wire data, and re-deriving per signer is
+  // what made this loop cost O(u²) scalar multiplications.
   const round2: PartialRecord[] = drafts.map((d, i) => ({
     ...d,
-    verified: partialSigVerify(psigs[i], pubnonces, pubkeys, msg, i),
-    sides: partialSigSides(psigs[i], pubnonces[i], pubkeys[i], session),
+    verified: partialSigVerifyInternal(psigs[i], pubnonces[i], pubkeys[i], session, sv),
+    sides: partialSigSides(psigs[i], pubnonces[i], pubkeys[i], session, sv),
   }));
 
   // --- Aggregate and verify with a plain BIP-340 verifier ------------------
-  const { sig, trace: aggTrace } = partialSigAgg(psigs, session);
+  const { sig, trace: aggTrace } = partialSigAgg(psigs, session, sv);
   const verdict = verify(sig, msg, aggpk);
 
   return {

@@ -121,7 +121,7 @@ BIP-327 supersedes the original MuSig2 paper's parameterisation for Bitcoin use 
 ```bash
 npm ci
 npm run dev        # http://localhost:5173/crypto-lab-musig-gate/
-npm test           # 254 unit tests, including the 56 BIP-327 spec KATs
+npm test           # 261 unit tests, including the 56 BIP-327 spec KATs
 npm run bench      # the protocol with no DOM, for the performance table
 npm run perf       # the browser figures, against the production build
 npm run build      # tsc --noEmit && vite build
@@ -144,7 +144,7 @@ Requires Node 22+. `npm run test:a11y` needs the Playwright Chromium browser onc
 
 ## Build & Verify
 
-**254 unit tests (Vitest), including 56 official BIP-327 known-answer cases** — 30 that must be accepted, 26 that must be rejected — plus **274 end-to-end tests (Playwright)** across four browser engines. All pass (six clipboard checks run on Chromium only, which is the engine Playwright grants clipboard permission for here, and are skipped elsewhere rather than silently asserted).
+**261 unit tests (Vitest), including 56 official BIP-327 known-answer cases** — 30 that must be accepted, 26 that must be rejected — plus **274 end-to-end tests (Playwright)** across four browser engines. All pass (six clipboard checks run on Chromium only, which is the engine Playwright grants clipboard permission for here, and are skipped elsewhere rather than silently asserted).
 
 Spec vectors, verbatim from [bitcoin/bips · bip-0327/vectors](https://github.com/bitcoin/bips/tree/master/bip-0327/vectors):
 
@@ -164,6 +164,8 @@ The same runners (`src/musig/vectors.ts`) drive both the Vitest suite and exhibi
 
 Two workflows, for one reason: `deploy.yml` must stay byte-for-byte identical across the fleet and it installs only Chromium, so Firefox and WebKit cannot run inside it. `.github/workflows/e2e.yml` installs all three engines and runs the full matrix on every push and pull request, while `deploy.yml`'s gate step runs axe plus the Chromium flows. The Chromium projects therefore run in both places, deliberately.
 
+The unit suite also gates *cost*: `cost.test.ts` counts every scalar multiplication a session performs and asserts the exact total, plus the shape of its growth — equal successive differences per signer, which is what rules out an O(u²) loop reappearing. It would have caught both of the inefficiencies described under Performance on the day they landed.
+
 Beyond the KATs, the unit suite covers: full 2-, 3-, 4- and 5-signer round trips verified by two independent verifiers; the algebraic identity `s_i = k_i1 + b·k_i2 + e·a_i·d_i` checked per signer; `Σ s_i` equal to the signature's `s`; secnonce consumption (a second `sign()` throws); refusal to sign with a mismatched key, an out-of-range key, or for a key list the signer is not in; rejection of a negated partial, a wrong-signer partial, and an out-of-range partial; single-bit tamper detection with correct attribution; the n-of-n boundary; the infinity-fallback and empty-message edge cases; the naive rogue-key attack **succeeding**; the BIP-327 rogue-key attack **failing**; single-nonce target-hitting **succeeding**; and two-nonce target-hitting **failing**. The two forgery modules are tested on the unusual requirement that an attack must *succeed*: the forged signature verifies, the honest signer provably never saw the forged message, no nonce was reused (its oracle throws on reuse, so a nonce-reuse key leak cannot be masquerading as the k-sum), and `Σ e_j = e*` over the integers rather than merely modulo 2^bits — plus soundness of the k-tree itself, which must return `null` rather than an inexact answer. ROS is held to the same bar at full width, and additionally to costing exactly one scalar multiplication per session plus one — evidence there is no hidden search term. The drawable group is tested on the group axioms (closure, associativity, inverses, identity), its stated order of 127, and that its generator enumerates all 127 elements — if any of those failed, the picture would be a lie. The lone-signer comparison is tested both ways: indistinguishable in shape for 2–5 signers, and *not* interchangeable in substance (neither signature verifies under the other's key), with the coin flip shown to reach both slots.
 
 **Accessibility gate:** `@axe-core/playwright` scans the production build for WCAG 2.1 A/AA violations in **both** themes, driving all five exhibits into their post-interaction states first — every step revealed, both attacks run in both modes, the malformed-input rejection path, the tamper and missing-signer failures, the byte-display switch flipped to full width so the wider layout is scanned too, the tour restarted and advanced far enough that the tab strip's completed-exhibit state is in the DOM, and every disclosure and learner check opened. Zero violations required.
@@ -182,24 +184,32 @@ Measured on an Apple M5 (10 cores), Chromium, against the production build serve
 
 | Operation | Time | Spread over runs |
 | --- | ---: | ---: |
-| Full 2-signer session + complete panel render | **~31 ms** | 30.9–31.5 ms |
-| Full 3-signer session + complete panel render | **~49 ms** | 48.8–50.1 ms |
-| Full 5-signer session + complete panel render | **~97 ms** | 96.1–98.2 ms |
-| All 56 BIP-327 vectors + table render | **~215 ms** | 214–217 ms |
-| Rogue-key attack: forge, then 6 fixed-point rounds | **~2.6 ms** | 2.5–2.8 ms |
-| The drawable group: 126 points + aggregation + plot | **~0.4 ms** | 0.3–0.5 ms |
-| Wagner forgery, 24-bit challenge | **~192 ms** | 186–200 ms |
-| Wagner forgery, 27-bit challenge | **~412 ms** | 404–470 ms |
-| Wagner forgery, 30-bit challenge | **~941 ms** | 923–1407 ms |
-| **ROS forgery, full 256-bit challenge, 256 sessions** | **~186 ms** | 183–188 ms |
+| Full 2-signer session + complete panel render | **~18 ms** | 17.9–18.9 ms |
+| Full 3-signer session + complete panel render | **~23 ms** | 23.2–23.9 ms |
+| Full 5-signer session + complete panel render | **~34 ms** | 33.3–34.1 ms |
+| All 56 BIP-327 vectors + table render | **~182 ms** | 181–184 ms |
+| Rogue-key attack: forge, then 6 fixed-point rounds | **~2.3 ms** | 2.3–2.5 ms |
+| The drawable group: 126 points + aggregation + plot | **~0.4 ms** | 0.4–0.5 ms |
+| Wagner forgery, 24-bit challenge | **~194 ms** | 187–196 ms |
+| Wagner forgery, 27-bit challenge | **~419 ms** | 400–482 ms |
+| Wagner forgery, 30-bit challenge | **~944 ms** | 925–975 ms |
+| **ROS forgery, full 256-bit challenge, 256 sessions** | **~187 ms** | 185–189 ms |
 
 The four forgery rows are the ones you need trust for least: **the page times itself and prints the figure**, and the harness simply reads what a visitor would see. Their spread is wider because Wagner runs a birthday search — a stochastic algorithm genuinely takes a different length of time each run, and a row whose min and max sit close together would be the suspicious one.
 
-The same protocol with no DOM at all (`npm run bench`, Vitest, mean of 10): **73 ms for 2 signers, 122 ms for 3, 256 ms for 5.** Higher than the browser column because `runSession` repeats the entire protocol on every call with nothing cached, which is what the page pays when you press `New keys` — and because the browser row is measured on Chromium's V8 rather than Node's.
+The same protocol with no DOM at all (`npm run bench`, Vitest, mean of 10+): **34 ms for 2 signers, 47 ms for 3, 77 ms for 5.** Higher than the browser column, which is measured on Chromium's V8 rather than Node's.
 
-A 5-signer session performs roughly 40 scalar multiplications (10 nonce points, 5 key-aggregation contributions, 5 partial-signature self-checks, 5 partial verifications at 3 each, plus two full verifications), which is why the cost scales visibly with the signer count. Sub-quarter-second is well inside "feels instant" for a click, which is why exhibit 5 runs the entire vector suite on every page load rather than shipping a cached result.
+A session costs **17 scalar multiplications per signer plus 4** — 89 for five signers — counted exactly, not estimated: `src/musig/cost.test.ts` mocks the one primitive every module reaches the curve through and asserts the total. That test is the real performance guard. A wall-clock ceiling is the obvious choice and the wrong one, because CI runners vary by more than the regression you are trying to catch; an operation count is identical on every machine and strictly more sensitive.
 
-Re-measuring found a real regression, which is the argument for having the harness at all. Every partial signature was having both sides of its group equation computed twice — once when the record was built, then again after the tamper path could have replaced the scalar — and the second result overwrote the first every single time. That dead scalar multiplication cost about a fifth of every session: 5 signers went from 319 ms to 256 ms with no DOM, and 117 ms to 97 ms in the browser, once it was computed only where it was used.
+Sub-quarter-second is well inside "feels instant" for a click, which is why exhibit 5 runs the entire vector suite on every page load rather than shipping a cached result.
+
+Measuring found two real problems, which is the argument for measuring at all.
+
+The first was dead work: every partial signature had both sides of its group equation computed twice — once when the record was built, then again after the tamper path could have replaced the scalar — and the second result overwrote the first every time.
+
+The second was worse and older, and only showed up once the work was being *counted* rather than timed. A session's derived values (`Q`, `b`, `R`, `e`) were re-derived inside every per-signer call, and deriving them re-runs the whole key aggregation — one scalar multiplication per signer. So signing and verifying `u` partials cost `O(u²)`: **4u² + 22u + 5**, or 215 multiplications for five signers where 89 suffice. The session is now derived once and passed down; the public, spec-shaped `partialSigVerify` still derives its own context exactly as BIP-327 describes, for callers who have only the wire data.
+
+Together: a 5-signer session went from **117 ms to 34 ms** in the browser and **319 ms to 77 ms** with no DOM, and the whole 56-case vector suite from 215 ms to 182 ms. Nothing about what is computed changed — only how many times.
 
 None of this arithmetic is constant-time and **no timing property should be inferred from these numbers** — they describe interactive responsiveness, not side-channel resistance.
 
