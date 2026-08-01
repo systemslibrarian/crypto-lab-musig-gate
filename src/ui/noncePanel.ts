@@ -311,7 +311,7 @@ export function renderNoncePanel(root: HTMLElement): void {
       h(
         'p',
         {},
-        'What is not here: the polynomial-time ROS attack of Benhamouda, Lepoint, Loss, Orrù and Raykova (2020), which breaks the same schemes without any birthday search but needs roughly 256 concurrent sessions. The Wagner route (Drijvers et al., "On the Security of Two-Round Multi-Signatures", IEEE S&P 2019) is the one implemented here because four sessions is something you can actually watch.',
+        'What is not reduced at all: the polynomial-time ROS attack of Benhamouda, Lepoint, Loss, Orrù and Raykova (2020), further down this page. It breaks the same schemes at the full 256-bit challenge width with no birthday search, at the cost of roughly 256 concurrent sessions. The Wagner route (Drijvers et al., "On the Security of Two-Round Multi-Signatures", IEEE S&P 2019) comes first only because four sessions is something you can actually watch.',
       ),
       h(
         'p',
