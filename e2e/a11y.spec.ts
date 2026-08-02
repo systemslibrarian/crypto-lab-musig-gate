@@ -194,8 +194,28 @@ async function scan(page: Page): Promise<void> {
   ).toEqual([]);
 }
 
+async function minimumControlBoundaryRatio(page: Page): Promise<number> {
+  return page.locator('.mono-input, .msg-input').evaluateAll((elements) => {
+    const rgb = (value: string) => value.match(/[\d.]+/g)!.slice(0, 3).map(Number);
+    const luminance = (parts: number[]) => {
+      const c = parts.map((part) => {
+        const value = part / 255;
+        return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+      });
+      return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+    };
+    return Math.min(...elements.map((el) => {
+      const style = getComputedStyle(el);
+      const border = luminance(rgb(style.borderTopColor));
+      const fill = luminance(rgb(style.backgroundColor));
+      return (Math.max(border, fill) + 0.05) / (Math.min(border, fill) + 0.05);
+    }));
+  });
+}
+
 test('no WCAG A/AA violations — dark theme', async ({ page }) => {
   await page.goto('.');
+  expect(await minimumControlBoundaryRatio(page)).toBeGreaterThanOrEqual(3);
   await driveDemos(page);
   await scan(page);
 });
@@ -204,6 +224,7 @@ test('no WCAG A/AA violations — light theme', async ({ page }) => {
   await page.goto('.');
   await page.locator('#cl-theme-toggle').click();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+  expect(await minimumControlBoundaryRatio(page)).toBeGreaterThanOrEqual(3);
   await driveDemos(page);
   await scan(page);
 });
