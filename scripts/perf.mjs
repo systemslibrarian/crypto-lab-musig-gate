@@ -27,7 +27,7 @@ import { spawn } from 'node:child_process';
 import { cpus, loadavg } from 'node:os';
 import { chromium } from '@playwright/test';
 
-const PORT = 4288;
+const PORT = 4716;
 const BASE = `http://localhost:${PORT}/crypto-lab-musig-gate/`;
 const RUNS = 11;
 const WARMUP = 2;
