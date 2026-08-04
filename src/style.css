@@ -116,7 +116,7 @@ body {
   color: var(--text);
 }
 
-/* ---------- hero (managed cl-hero standard) ---------- */
+/* ---------- hero (this lab owns it; fleet-consistent by review) ---------- */
 .cl-hero{display:flex;align-items:flex-start;justify-content:space-between;gap:clamp(1rem,4vw,3rem);flex-wrap:wrap;margin:clamp(1rem,3vw,2rem) 0 1.5rem;}
 .cl-hero-main{flex:1 1 22rem;min-width:min(100%,20rem);}
 .cl-hero-title{margin:0;font-size:clamp(1.6rem,3.8vw,2.7rem);font-weight:700;line-height:1.1;letter-spacing:.01em;}
