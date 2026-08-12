@@ -13,11 +13,22 @@
   --bg: #100e0c;
   --surface: #1a1613;
   --surface-2: #221c18;
-  --border: #3a312a;
-  --control-border: #6b625a;
+  --border: #3a312a; /* a divider BETWEEN surfaces — never a control's edge */
+  /* The edge of an interactive control, which SC 1.4.11 holds to 3:1 against
+     whatever surrounds it. Measured against the lightest surface a control ever
+     sits on in this theme (--surface-2, #221c18): #6b625a scored 2.82:1 and was
+     the reason every button on the page failed; #7a7168 scores 3.52:1 there,
+     3.76:1 on --surface and 4.03:1 against the --bg fill of a text input. */
+  --control-border: #7a7168;
   --text: #e6e0d8;
   --text-dim: #b6aca2; /* muted via lower lightness, never opacity */
   --accent: #d67a4a; /* brand accent — also read by the shared header */
+  /* The accent where it has to CARRY something: a control's fill, or a line in
+     the curve plot. Identical to --accent here; the light theme darkens it,
+     because #d67a4a is only 2.64:1 against a light --surface-2 and 2.87:1
+     against --accent-tint. Kept separate from --accent so the always-dark
+     shared top bar, which mixes --accent into its own ink, is untouched. */
+  --accent-strong: #d67a4a;
   --accent-ink: #1a0c04; /* text on an accent fill (6.1:1) */
   --accent-text: #d67a4a; /* accent as text / links / borders on the page bg */
   --accent-tint: #181310; /* accent-flavoured panel background */
@@ -45,6 +56,10 @@
   --text: #1c1815;
   --text-dim: #57504a;
   --accent: #d67a4a;
+  /* 3.22:1 on --surface-2, 3.51:1 on --accent-tint, 3.54:1 on --bg, 3.80:1 on
+     --surface — and --accent-ink still reads 5.03:1 on it, so an accent-filled
+     button keeps its label. #d67a4a cleared none of the first four. */
+  --accent-strong: #c66a38;
   --accent-ink: #1a0c04;
   --accent-text: #8a4415; /* darker so links/headings stay AA on a light bg */
   --accent-tint: #faf5ee;
@@ -115,6 +130,50 @@ body {
 #app h3 {
   color: var(--text);
 }
+
+/* ---------- buttons ----------
+   POSITION IS LOAD-BEARING. `.btn` and its variants are single-class rules, and
+   so is every per-use modifier in this file — `.tour-start-btn`, `.predict-opt`,
+   `.predict-chosen`, `.seg-btn`, `.copy-btn`. Equal specificity means the LATER
+   rule wins, so while this block sat halfway down the file it silently beat
+   every modifier declared above it. All of these were dead:
+
+     .tour-start-btn  font-size + padding  (the "make this the big one" rule)
+     .predict-opt     font-size
+     .predict-chosen  border-color, background AND font-weight — so the chosen
+                      option in a prediction group looked exactly like the three
+                      unchosen ones, in every theme
+     .seg-btn         border, border-radius, padding, font-size
+     .copy-btn        font-size, padding
+
+   The base therefore lives here, above every modifier, and source order does the
+   work rather than a specificity arms race. Anything added below this point that
+   names a button beats it, which is the intended direction. */
+.btn {
+  font: inherit;
+  font-weight: 600;
+  font-size: 0.88rem;
+  border-radius: 8px;
+  padding: 0.5rem 0.9rem;
+  cursor: pointer;
+  /* --control-border, not --border: this is a control's edge, and SC 1.4.11
+     holds it to 3:1 against the panel outside it. On --border it measured
+     1.32:1 to 1.58:1 depending on which panel the button sat in. */
+  border: 1px solid var(--control-border);
+}
+.btn:disabled { cursor: not-allowed; color: var(--text-dim); background: var(--surface-2); }
+.btn-primary {
+  background: var(--accent-strong);
+  color: var(--accent-ink);
+  border-color: var(--accent-strong);
+}
+.btn-primary:hover:not(:disabled) { filter: brightness(1.07); }
+.btn-primary:disabled { background: var(--surface-2); border-color: var(--border); }
+.btn-ghost { background: var(--surface-2); color: var(--text); }
+.btn-ghost:hover:not(:disabled) { border-color: var(--accent-text); }
+.preset-accept { border-color: var(--ok); }
+.preset-reject { border-color: var(--bad); }
+
 
 /* ---------- hero (this lab owns it; fleet-consistent by review) ---------- */
 .cl-hero{display:flex;align-items:flex-start;justify-content:space-between;gap:clamp(1rem,4vw,3rem);flex-wrap:wrap;margin:clamp(1rem,3vw,2rem) 0 1.5rem;}
@@ -213,7 +272,12 @@ body {
 .predict-q { margin: 0; font-size: 0.97rem; font-weight: 600; max-width: 72ch; }
 .predict-opts { display: flex; flex-wrap: wrap; gap: 0.4rem; }
 .predict-opt { font-size: 0.85rem; }
-.predict-chosen { border-color: var(--accent); background: var(--surface); font-weight: 700; }
+/* The chosen option, which until now was three declarations that all lost to the
+   `.btn` block. --accent-strong rather than --accent because this IS the
+   control's boundary in that state and has to hold 3:1 against --accent-tint,
+   where plain --accent measures 2.87:1 in the light theme. The state also
+   reaches assistive technology as `aria-pressed` — see `prediction()`. */
+.predict-chosen { border-color: var(--accent-strong); background: var(--surface); font-weight: 700; }
 .predict-status { display: grid; gap: 0.25rem; }
 .predict-debrief {
   display: grid;
@@ -334,8 +398,8 @@ body {
 .tab-btn:hover { color: var(--text); background: var(--surface-2); }
 .tab-btn.active {
   color: var(--accent-ink);
-  background: var(--accent);
-  border-color: var(--accent);
+  background: var(--accent-strong);
+  border-color: var(--accent-strong);
 }
 /* While the tour runs, the strip is the lesson map: stops behind you are marked. */
 .tab-btn.tab-done { color: var(--ok); }
@@ -352,7 +416,7 @@ body {
   border-radius: 0 var(--radius) var(--radius) 0;
   padding-left: 1.1rem;
 }
-.tab-btn[data-panel='vectors'].active { border-left-color: var(--accent); }
+.tab-btn[data-panel='vectors'].active { border-left-color: var(--accent-strong); }
 
 /* ---------- the one term a stage needs ---------- */
 .term-aside {
@@ -382,11 +446,14 @@ body {
   font-size: 0.82rem;
 }
 .byte-mode-label { font-weight: 600; color: var(--text-dim); }
+/* The group used to draw the only edge — one `--border` rectangle, 1.52:1
+   against the page behind it — while each segment's own `border: none` lost to
+   `.btn` and drew a second `--border` edge inside it. Now each segment draws its
+   own `--control-border` edge (3.52:1 dark, 4.65:1 light) and neighbours collapse
+   onto one another, so the control is one delineated pair rather than a box
+   containing two boxes. */
 .seg {
   display: inline-flex;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  overflow: hidden;
   width: fit-content;
 }
 .seg-btn {
@@ -396,12 +463,13 @@ body {
   padding: 0.3rem 0.7rem;
   background: var(--surface);
   color: var(--text-dim);
-  border: none;
   border-radius: 0;
   cursor: pointer;
 }
-.seg-btn + .seg-btn { border-left: 1px solid var(--border); }
-.seg-btn[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.seg-btn:first-child { border-radius: 8px 0 0 8px; }
+.seg-btn:last-child { border-radius: 0 8px 8px 0; }
+.seg-btn + .seg-btn { margin-left: -1px; }
+.seg-btn[aria-pressed="true"] { background: var(--accent-strong); color: var(--accent-ink); }
 .value-with-copy { display: flex; gap: 0.5rem; align-items: flex-start; }
 .value-with-copy .field-value { flex: 1 1 auto; }
 .copy-btn { font-size: 0.78rem; white-space: nowrap; padding: 0.3rem 0.6rem; }
@@ -448,24 +516,6 @@ input[type="checkbox"] { accent-color: var(--accent); width: 1.05rem; height: 1.
   padding: 0.5rem 0.6rem;
 }
 .msg-input { resize: vertical; }
-
-.btn {
-  font: inherit;
-  font-weight: 600;
-  font-size: 0.88rem;
-  border-radius: 8px;
-  padding: 0.5rem 0.9rem;
-  cursor: pointer;
-  border: 1px solid var(--border);
-}
-.btn:disabled { cursor: not-allowed; color: var(--text-dim); background: var(--surface-2); }
-.btn-primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
-.btn-primary:hover:not(:disabled) { filter: brightness(1.07); }
-.btn-primary:disabled { background: var(--surface-2); border-color: var(--border); }
-.btn-ghost { background: var(--surface-2); color: var(--text); }
-.btn-ghost:hover:not(:disabled) { border-color: var(--accent-text); }
-.preset-accept { border-color: var(--ok); }
-.preset-reject { border-color: var(--bad); }
 
 /* ---------- output / fields ---------- */
 .output { display: grid; gap: 1rem; margin-top: 0.5rem; }
@@ -527,9 +577,9 @@ input[type="checkbox"] { accent-color: var(--accent); width: 1.05rem; height: 1.
   padding-right: 0.35rem;
 }
 .chip-agg {
-  background: var(--accent);
+  background: var(--accent-strong);
   color: var(--accent-ink);
-  border-color: var(--accent);
+  border-color: var(--accent-strong);
   font-weight: 700;
 }
 .chip-agg .chip-idx { color: var(--accent-ink); border-right-color: var(--accent-ink); }
@@ -801,16 +851,34 @@ input[type="checkbox"] { accent-color: var(--accent); width: 1.05rem; height: 1.
   border-radius: 8px;
 }
 /* Every dot below is a real curve point; nothing here is illustrative. */
+/* The whole group as a backdrop, and the one graphic here deliberately left
+   below 3:1 (2.90:1 dark, 2.25:1 light, measured). SC 1.4.11 covers "parts of
+   graphics required to understand the content"; these dots are not one. What
+   they convey — that the group has 126 elements and this is its shape — is
+   stated in the figcaption, in the plot's aria-label and in the coefficient
+   table beside it, and the marks a reader must actually distinguish (the
+   numbered keys, the weighted points, the path, the aggregate and the naive
+   path) all clear 3:1 above. Raising these to 3:1 in the light theme is not
+   possible while they remain a backdrop: dimming toward a light background IS
+   losing contrast. */
 .cp-all circle { fill: var(--text-dim); opacity: 0.5; }
 .cp-axes line { stroke: var(--border); stroke-width: 1; }
 .cp-tick, .cp-axis-label { fill: var(--text-dim); font-size: 11px; font-family: var(--mono); }
 .cp-axis-label { font-weight: 700; fill: var(--text); }
-.cp-path polyline { stroke: var(--accent); stroke-width: 2; stroke-dasharray: none; }
+/* Every stroke and fill below is a mark a reader has to tell apart from the
+   panel behind it, so all of them take --accent-strong: plain --accent measures
+   2.64:1 against the light --surface-2 this plot is drawn on, and 3.22:1 with
+   the token. The faint scatter is the deliberate exception — see .cp-all. */
+.cp-path polyline { stroke: var(--accent-strong); stroke-width: 2; stroke-dasharray: none; }
 .cp-naive polyline { stroke: var(--bad); stroke-width: 1.5; stroke-dasharray: 4 3; }
 .cp-naive-end { fill: none; stroke: var(--bad); stroke-width: 2; }
-.cp-keys circle { fill: var(--accent); stroke: var(--bg); stroke-width: 1.5; }
-.cp-weighted { fill: none !important; stroke: var(--accent); stroke-width: 2; }
-.cp-kick { stroke: var(--accent); stroke-width: 1; stroke-dasharray: 2 2; opacity: 0.75; }
+.cp-keys circle { fill: var(--accent-strong); stroke: var(--bg); stroke-width: 1.5; }
+.cp-weighted { fill: none !important; stroke: var(--accent-strong); stroke-width: 2; }
+/* The line from P_i to a_i·P_i — the mark that says where the coefficient sent
+   the key, so it has to be visible. The 0.75 opacity that used to de-emphasise
+   it dropped it to 2.36:1 against the light plot panel, and the dash pattern and
+   1px width already say "supporting mark" without costing contrast. */
+.cp-kick { stroke: var(--accent-strong); stroke-width: 1; stroke-dasharray: 2 2; }
 .cp-num { fill: var(--accent-ink); font-size: 10px; font-weight: 700; font-family: var(--mono); }
 .cp-agg { fill: var(--ok); stroke: var(--bg); stroke-width: 2; }
 .cp-agg-label { fill: var(--accent-ink); font-size: 11px; font-weight: 700; font-family: var(--mono); }
@@ -823,10 +891,10 @@ input[type="checkbox"] { accent-color: var(--accent); width: 1.05rem; height: 1.
   border-radius: 50%;
   vertical-align: middle;
 }
-.cp-swatch-key { background: var(--accent); }
-.cp-swatch-weighted { border: 2px solid var(--accent); }
+.cp-swatch-key { background: var(--accent-strong); }
+.cp-swatch-weighted { border: 2px solid var(--accent-strong); }
 .cp-swatch-agg { background: var(--ok); }
-.cp-swatch-path { width: 1.1rem; height: 0; border-radius: 0; border-top: 3px solid var(--accent); }
+.cp-swatch-path { width: 1.1rem; height: 0; border-radius: 0; border-top: 3px solid var(--accent-strong); }
 .cp-swatch-naive { border: 2px dashed var(--bad); }
 .cp-caption-text { display: block; margin-top: 0.4rem; font-size: 0.82rem; color: var(--text-dim); }
 

@@ -3,7 +3,8 @@ import { defineConfig, devices } from '@playwright/test';
 /**
  * End-to-end suites, both run against the production build served by
  * `vite preview`, so what passes here is what ships:
- *   - a11y.spec.ts  — the axe WCAG 2.1 A/AA gate, both themes.
+ *   - a11y.spec.ts  — the WCAG 2.1 A/AA gate, run in {dark, light} x {1280, 380}.
+ *     It drives every exhibit and scans after every step; see e2e/gate.ts.
  *   - flows.spec.ts — functional flows, across Chromium desktop, a mobile viewport,
  *     Firefox and WebKit.
  *
@@ -17,7 +18,7 @@ import { defineConfig, devices } from '@playwright/test';
 export default defineConfig({
   testDir: './e2e',
   fullyParallel: true,
-  timeout: 240_000, // the axe driver walks the tour, every exhibit and both forgeries
+  timeout: 240_000, // flows only — a11y.spec.ts sets its own, much larger, budget
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
   reporter: 'list',
@@ -38,7 +39,12 @@ export default defineConfig({
     {
       name: 'a11y',
       testMatch: /a11y\.spec\.ts/,
-      // Scan the real dark default; the bar's toggle deterministically reaches light.
+      // The theme is seeded through localStorage before the navigation (which also
+      // pins down whether the anti-flash script and the bar's toggle agree on the
+      // key), and the viewport is set per configuration inside the spec — so this
+      // one project covers all four. `colorScheme` is the OS-level preference and
+      // is left dark deliberately: this lab reads `data-theme`, not the media
+      // query, so a light run here is also a run with the two disagreeing.
       use: { ...devices['Desktop Chrome'], colorScheme: 'dark' },
     },
     {

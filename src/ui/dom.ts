@@ -422,9 +422,20 @@ export function prediction(
       {
         type: 'button',
         class: 'btn btn-ghost predict-opt',
+        // These four buttons are a single-select group, and until now the choice
+        // reached nobody: `.predict-chosen` was three declarations that all lost
+        // to `.btn` (see style.css), and there was no ARIA state at all — so a
+        // screen-reader user was told "Prediction recorded" without being told
+        // WHICH. `aria-pressed` is the same idiom the byte-mode switch in this
+        // file already uses, and it makes the state a property of the control
+        // rather than of a class name.
+        'aria-pressed': 'false',
         onclick: () => {
           predictions.set(id, { chosen: i, correct: o.correct, label: o.label });
-          for (const b of buttons) b.classList.toggle('predict-chosen', b === buttons[i]);
+          for (const b of buttons) {
+            b.classList.toggle('predict-chosen', b === buttons[i]);
+            b.setAttribute('aria-pressed', String(b === buttons[i]));
+          }
           clear(status);
           status.append(
             h('span', { class: 'pill pill-neutral' }, 'Prediction recorded'),
