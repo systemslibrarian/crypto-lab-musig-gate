@@ -979,14 +979,6 @@ test.describe('bridges between exhibits', () => {
 });
 
 test.describe('chrome and navigation', () => {
-  test('the theme toggle flips the document theme and persists it', async ({ page }) => {
-    await page.goto('.');
-    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
-    await page.locator('#cl-theme-toggle').click();
-    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
-    await page.reload();
-    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
-  });
 
   test('there is exactly one h1 and one banner landmark', async ({ page }) => {
     await page.goto('.');

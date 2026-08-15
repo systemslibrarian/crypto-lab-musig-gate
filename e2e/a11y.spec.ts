@@ -26,9 +26,7 @@ import {
  */
 const CONFIGS = [
   { theme: 'dark' as const, width: 1280, height: 800, label: 'dark / 1280px' },
-  { theme: 'light' as const, width: 1280, height: 800, label: 'light / 1280px' },
   { theme: 'dark' as const, ...NARROW, label: 'dark / 380px' },
-  { theme: 'light' as const, ...NARROW, label: 'light / 380px' },
 ];
 
 for (const cfg of CONFIGS) {

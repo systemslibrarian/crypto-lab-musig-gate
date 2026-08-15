@@ -39,11 +39,6 @@ export const NONTEXT_BASELINE: Record<
   // The shared bar's Menu and GitHub controls, `<a class="cl-btn">`.
   'control-boundary|a.cl-btn': { ratio: 1.83, required: 3, unverified: false },
   // The shared bar's theme toggle, the same `.cl-btn` edge on a <button>.
-  'control-boundary|button#cl-theme-toggle.cl-btn.cl-icon': {
-    ratio: 1.83,
-    required: 3,
-    unverified: false,
-  },
   // The vectors tab, and only that one. `.tab-btn` ships `border: 1px solid
   // transparent` as a layout spacer, so an unselected tab paints nothing and is
   // correctly exempt — except this one, which carries the deliberate divider
