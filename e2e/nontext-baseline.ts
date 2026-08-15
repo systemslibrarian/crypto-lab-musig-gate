@@ -44,4 +44,21 @@ export const NONTEXT_BASELINE: Record<
     required: 3,
     unverified: false,
   },
+  // The vectors tab, and only that one. `.tab-btn` ships `border: 1px solid
+  // transparent` as a layout spacer, so an unselected tab paints nothing and is
+  // correctly exempt — except this one, which carries the deliberate divider
+  // `.tab-btn[data-panel='vectors'] { border-left: 1px solid var(--border) }`
+  // marking it as implementation evidence rather than a chapter of the tour.
+  // That divider is the only paint on the control, so it IS its boundary, and
+  // `var(--border)` against the tablist reads 1.47:1 in dark theme and 1.52:1
+  // in light. The old oracle tested `borderTopColor` alone, found the
+  // transparent spacer, and skipped the element entirely; walking every painted
+  // side is what surfaced it. Raising it means recolouring the `--border`
+  // hairline this lab uses everywhere, which is a visual decision, not a token
+  // swap — the same reason the `.cl-btn` entries above are still here.
+  'control-boundary|button#tab-vectors.tab-btn': {
+    ratio: 1.47,
+    required: 3,
+    unverified: false,
+  },
 };
