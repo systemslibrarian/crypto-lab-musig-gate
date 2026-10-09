@@ -12,7 +12,7 @@
  * verification and two independent full verifications all happen every time — which
  * is what the page pays when you press "New keys".
  */
-import { bench, describe } from 'vitest';
+import { describe, test } from 'vitest';
 import { loneSignerComparison, makeSigners, runSession } from './session.js';
 
 const MESSAGE = 'Move 2 BTC to the cold wallet';
@@ -20,15 +20,19 @@ const signerSets = new Map([2, 3, 5].map((n) => [n, makeSigners(n)]));
 
 describe('a full MuSig2 session, no DOM', () => {
   for (const count of [2, 3, 5]) {
-    bench(`${count} signers — aggregate, sign both rounds, verify twice`, () => {
-      runSession(signerSets.get(count)!, MESSAGE, { sortKeys: true });
+    test(`${count} signers — aggregate, sign both rounds, verify twice`, async ({ bench }) => {
+      await bench(`${count} signers — aggregate, sign both rounds, verify twice`, () => {
+        runSession(signerSets.get(count)!, MESSAGE, { sortKeys: true });
+      }).run();
     });
   }
 });
 
 describe('the headline claim', () => {
   const result = runSession(signerSets.get(3)!, MESSAGE, { sortKeys: true });
-  bench('lone-signer comparison — group signature against a single-signer one', () => {
-    loneSignerComparison(result);
+  test('lone-signer comparison — group signature against a single-signer one', async ({ bench }) => {
+    await bench('lone-signer comparison — group signature against a single-signer one', () => {
+      loneSignerComparison(result);
+    }).run();
   });
 });
