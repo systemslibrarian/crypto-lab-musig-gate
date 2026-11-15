@@ -13,10 +13,12 @@
  * solving a hash fixed point. That is the entire rogue-key defence.
  *
  * The one wrinkle: the "second key" (the first key in the list that differs from
- * the first key) gets coefficient 1 instead of a hash. That is a deliberate
- * optimisation for the extremely common 1-of-my-own-keys case and is provably
- * safe — at most one signer gets the shortcut, so at least u−1 coefficients are
- * still hash-bound, which is enough to pin Q down.
+ * the first key) gets coefficient 1 instead of a hash. BIP-327 gives one reason
+ * for it — the scheme is MuSig2*, which "allows saving a point multiplication in
+ * key aggregation as compared to MuSig2", since a coefficient of 1 needs no
+ * scalar multiply — and rests its safety on the proof in the appendix of the
+ * MuSig2 paper. At most one signer gets the shortcut, so at least u−1
+ * coefficients are still hash-bound, which is enough to pin Q down.
  *
  * NOT production crypto — a teaching demo.
  */

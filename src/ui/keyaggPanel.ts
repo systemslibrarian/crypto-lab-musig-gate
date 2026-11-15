@@ -330,7 +330,7 @@ export function renderKeyAggPanel(root: HTMLElement): void {
         h(
           'p',
           {},
-          'It is an optimisation for the overwhelmingly common case of aggregating keys you already control, and it is safe: at most one signer ever gets the shortcut, so at least u−1 coefficients remain hash-bound to the whole list. That is enough to pin Q down, because an attacker steering Q would still have to satisfy a hash fixed point on its own coefficient.',
+          'To save a multiplication. BIP-327 says so in those terms: the scheme it specifies is MuSig2*, “which allows saving a point multiplication in key aggregation as compared to MuSig2”, and the optimisation “consists of assigning the constant key aggregation coefficient 1 to the second distinct key”. A coefficient of 1 needs no scalar multiply, so Q costs u−1 multiplications instead of u — whatever the keys belong to. It is safe because MuSig2* is proven secure in the appendix of the MuSig2 paper; and the shape of that safety is visible here — at most one signer ever gets the shortcut, so at least u−1 coefficients remain hash-bound to the whole list, and an attacker steering Q would still have to satisfy a hash fixed point on its own coefficient.',
         ),
         h(
           'p',

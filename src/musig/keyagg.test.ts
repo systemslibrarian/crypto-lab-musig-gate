@@ -48,6 +48,24 @@ describe('key-aggregation coefficients', () => {
     expect(ones[0].pubkey).toBe(bytesToHex(keys[1]));
   });
 
+  // BIP-327 gives exactly one reason for the shortcut: MuSig2* "allows saving a
+  // point multiplication in key aggregation as compared to MuSig2". The saving
+  // IS the coefficient of 1 — that term is the point itself — so u keys cost
+  // u−1 multiplications. The panel copy once explained it as a convenience for
+  // aggregating keys you already hold, which is not the reason and not a
+  // condition: the saving applies to any key list with two distinct keys.
+  it('the coefficient-1 shortcut is the saved point multiplication', () => {
+    const keys = keysFor(4);
+    const second = getSecondKey(keys);
+    expect(keyAggCoeff(keys, second)).toBe(1n);
+
+    const P2 = cpoint(second);
+    expect(mul(P2, keyAggCoeff(keys, second)).equals(P2)).toBe(true);
+
+    const multiplied = keys.filter((pk) => keyAggCoeff(keys, pk) !== 1n);
+    expect(multiplied).toHaveLength(keys.length - 1);
+  });
+
   it('uses 33 zero bytes as the second key when every key is identical', () => {
     const pk = cbytes(mul(G, randomScalar()));
     const keys = [pk, pk, pk];
