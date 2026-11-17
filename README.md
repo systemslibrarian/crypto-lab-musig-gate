@@ -15,7 +15,7 @@ The exact primitives, all hand-rolled in `src/musig/` so every intermediate valu
 - **Partial signatures** — `s_i = k_i1 + b·k_i2 + e·a_i·d_i (mod n)`, each independently verifiable so a bad contribution is **attributable** to a signer.
 - **Aggregation** — `Σ s_i`, yielding `R.x ‖ s`: an ordinary 64-byte BIP-340 signature under the 32-byte aggregate key.
 
-Group arithmetic (point add/multiply, field square root, scalar inversion) comes from **[@noble/curves](https://github.com/paulmillr/noble-curves)** — audited, and deliberately not the teaching subject. BIP-327 itself is implemented here.
+Group arithmetic (point add/multiply, field square root, scalar inversion) comes from **[@noble/curves](https://github.com/paulmillr/noble-curves)** — pinned `^2.4.0`, one release past its latest independent audit ("at version 2.3.0, in Aug 2026, by [Trail of Bits]", scope "everything"), and deliberately not the teaching subject. BIP-327 itself is implemented here.
 
 Two things are deliberately run at reduced scale, each labelled as such in the page, because the honest alternative was to describe them in prose:
 

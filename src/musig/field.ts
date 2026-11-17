@@ -2,7 +2,9 @@
  * secp256k1 group parameters plus the byte/point encodings BIP-327 fixes.
  *
  * Group arithmetic (point add/multiply, field sqrt, scalar inverse) comes from
- * @noble/curves — audited, and NOT the teaching subject. The teaching subject is
+ * @noble/curves — pinned ^2.4.0, one release past its latest independent audit
+ * ("at version 2.3.0, in Aug 2026, by [Trail of Bits]", scope "everything") — and
+ * NOT the teaching subject. The teaching subject is
  * MuSig2 itself (key-aggregation coefficients, the two-nonce coefficient b, the
  * partial-signature equation), which is hand-rolled in keyagg.ts / nonce.ts /
  * sign.ts on top of these primitives so every intermediate value is inspectable.
