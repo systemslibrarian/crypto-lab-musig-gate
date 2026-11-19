@@ -27,7 +27,9 @@ import { spawn } from 'node:child_process';
 import { cpus, loadavg } from 'node:os';
 import { chromium } from '@playwright/test';
 
-const PORT = 4716;
+// This lab's port in crypto-lab/tools/playwright-ports.json. 4716 belongs to
+// crypto-lab-misty-lens, and this script spawns its own preview on it.
+const PORT = 4276;
 const BASE = `http://localhost:${PORT}/crypto-lab-musig-gate/`;
 const RUNS = 11;
 const WARMUP = 2;
