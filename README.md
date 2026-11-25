@@ -69,9 +69,9 @@ Each panel closes by saying what it established and what question that creates, 
    - **The ROS attack**, at the **full 256-bit width with nothing reduced**. 256 concurrent sessions, two candidate challenges computed offline per session, and the bit pattern falls out of a single modular subtraction — no search anywhere. **256 sessions in, 257 signatures out**, in about half a second. This is what the attack actually costs in reality.
 
    Both use real secp256k1 with hash-derived key-aggregation coefficients, so the key setup is provably *not* the flaw, and a signing oracle that throws on nonce reuse, so a nonce-reuse key leak cannot be masquerading as the attack. Running each against two nonces shows exactly why it dies: Wagner's k-tree needs a fixed target, ROS needs a constant right-hand side, and with two nonces both are functions of the very values being solved for.
-5. **BIP-327 Vectors** — all **56** official BIP-327 known-answer cases from all seven vector files, executed in the browser on load, each expandable to expected-vs-actual. Includes the specification's malformed-input cases, which must be *rejected* for the right reason.
+5. **BIP-327 Vectors** — all **70** official BIP-327 known-answer cases from all seven vector files, executed in the browser on load, each expandable to expected-vs-actual, plus one separately labelled lab-authored consistency check. Includes the specification's malformed-input cases, which must be *rejected* for the right reason.
 
-   Fifty-six green rows are evidence, not a lesson, so **three cases are pulled to the front** — the ones that change how you would write an implementation rather than merely confirming arithmetic: a public key that is not a curve point, where rejecting is not enough because the report has to name the signer; a partial signature at or above the group order, where the obvious shortcut of reducing mod `n` quietly costs you that identifiable abort; and a nonce half that cancels to the point at infinity, where the correct behaviour is *not* to reject but to serialize 33 zero bytes and carry on — and any signer moving last can force exactly that. They are looked up by vector group and index, so a reworded vector file surfaces as a visible missing case rather than silently dropping one.
+   Seventy green official rows are evidence, not a lesson, so **three cases are pulled to the front** — the ones that change how you would write an implementation rather than merely confirming arithmetic: a public key that is not a curve point, where rejecting is not enough because the report has to name the signer; a partial signature at or above the group order, where the obvious shortcut of reducing mod `n` quietly costs you that identifiable abort; and a nonce half that cancels to the point at infinity, where the correct behaviour is *not* to reject but to serialize 33 zero bytes and carry on — and any signer moving last can force exactly that. They are looked up by vector group and index, so a reworded vector file surfaces as a visible missing case rather than silently dropping one.
 
 ## When to Use It
 
@@ -93,7 +93,7 @@ Do **NOT** use MuSig2 when:
 
 **<https://systemslibrarian.github.io/crypto-lab-musig-gate/>**
 
-In the browser you can: step a real 2-to-5-signer session from fresh keys to one 64-byte signature; watch the key, nonce and signature collapses happen one stage at a time; verify the aggregate signature with a plain BIP-340 verifier and an independent library verifier; try to pick the group's signature out of a blind pair against a lone signer's and discover you cannot; corrupt one partial signature and see the culprit named; attempt to sign with a signer missing; mount a rogue-key attack that a real verifier accepts, then watch the same attack fail against BIP-327; steer a single-nonce aggregate onto a chosen target and watch the two-nonce version refuse; and run all 56 BIP-327 vectors live.
+In the browser you can: step a real 2-to-5-signer session from fresh keys to one 64-byte signature; watch the key, nonce and signature collapses happen one stage at a time; verify the aggregate signature with a plain BIP-340 verifier and an independent library verifier; try to pick the group's signature out of a blind pair against a lone signer's and discover you cannot; corrupt one partial signature and see the culprit named; attempt to sign with a signer missing; mount a rogue-key attack that a real verifier accepts, then watch the same attack fail against BIP-327; steer a single-nonce aggregate onto a chosen target and watch the two-nonce version refuse; and run all 70 official BIP-327 vectors live.
 
 Deep links: `#session`, `#keyagg`, `#rogue`, `#nonce`, `#vectors`.
 
@@ -121,7 +121,7 @@ BIP-327 supersedes the original MuSig2 paper's parameterisation for Bitcoin use 
 ```bash
 npm ci
 npm run dev        # http://localhost:5173/crypto-lab-musig-gate/
-npm test           # 261 unit tests, including the 56 BIP-327 spec KATs
+npm test           # includes all 70 official BIP-327 spec KATs plus one internal check
 npm run bench      # the protocol with no DOM, for the performance table
 npm run perf       # the browser figures, against the production build
 npm run build      # tsc --noEmit && vite build
@@ -144,19 +144,19 @@ Requires Node 22+. `npm run test:a11y` needs the Playwright Chromium browser onc
 
 ## Build & Verify
 
-**261 unit tests (Vitest), including 56 official BIP-327 known-answer cases** — 30 that must be accepted, 26 that must be rejected — plus **274 end-to-end tests (Playwright)** across four browser engines. All pass (six clipboard checks run on Chromium only, which is the engine Playwright grants clipboard permission for here, and are skipped elsewhere rather than silently asserted).
+The Vitest suite includes **70 official BIP-327 known-answer cases** — 39 that must be accepted and 31 that must be rejected — plus one separately labelled internal consistency check. The Playwright suite covers the lesson across four browser engines (six clipboard checks run on Chromium only, which is the engine Playwright grants clipboard permission for here, and are skipped elsewhere rather than silently asserted).
 
 Spec vectors, verbatim from [bitcoin/bips · bip-0327/vectors](https://github.com/bitcoin/bips/tree/master/bip-0327/vectors):
 
 | File | Cases | Covers |
 | --- | --- | --- |
-| `src/musig/vectors/key_agg_vectors.json` | 9 | key aggregation, order dependence, all-identical keys, malformed keys, bad tweaks |
-| `src/musig/vectors/nonce_gen_vectors.json` | 4 | the two-nonce derivation, with/without secret-key hardening, absent vs. empty message |
+| `src/musig/vectors/key_agg_vectors.json` | 10 | key aggregation, order dependence, all-identical keys, malformed keys, bad tweaks |
+| `src/musig/vectors/nonce_gen_vectors.json` | 7 | the two-nonce derivation, with/without secret-key hardening, absent vs. empty message |
 | `src/musig/vectors/nonce_agg_vectors.json` | 5 | independent half summation, infinity encoding, malformed nonces |
-| `src/musig/vectors/sign_verify_vectors.json` | 18 | partial signatures byte-for-byte, wrong signer, negated signature, out-of-range scalar |
-| `src/musig/vectors/tweak_vectors.json` | 6 | plain and x-only tweaks applied to the aggregate key |
-| `src/musig/vectors/det_sign_vectors.json` | 9 | deterministic signing for the last signer |
-| `src/musig/vectors/sig_agg_vectors.json` | 5 | partial signatures → one 64-byte signature **that a plain BIP-340 verifier accepts** |
+| `src/musig/vectors/sign_verify_vectors.json` | 23 | partial signatures byte-for-byte, wrong signer, negated signature, out-of-range scalar |
+| `src/musig/vectors/tweak_vectors.json` | 7 | plain and x-only tweaks applied to the aggregate key |
+| `src/musig/vectors/det_sign_vectors.json` | 11 | deterministic signing for the last signer |
+| `src/musig/vectors/sig_agg_vectors.json` | 7 | partial signatures → one 64-byte signature **that a plain BIP-340 verifier accepts** |
 
 The same runners (`src/musig/vectors.ts`) drive both the Vitest suite and exhibit 5's live table, so a green table in the browser and a green CI run are the same claim.
 
@@ -187,7 +187,7 @@ Measured on an Apple M5 (10 cores), Chromium, against the production build serve
 | Full 2-signer session + complete panel render | **~18 ms** | 17.9–18.9 ms |
 | Full 3-signer session + complete panel render | **~23 ms** | 23.2–23.9 ms |
 | Full 5-signer session + complete panel render | **~34 ms** | 33.3–34.1 ms |
-| All 56 BIP-327 vectors + table render | **~182 ms** | 181–184 ms |
+| Then-current 55 BIP-327 vectors + one internal check + table render | **~182 ms** | 181–184 ms |
 | Rogue-key attack: forge, then 6 fixed-point rounds | **~2.3 ms** | 2.3–2.5 ms |
 | The drawable group: 126 points + aggregation + plot | **~0.4 ms** | 0.4–0.5 ms |
 | Wagner forgery, 24-bit challenge | **~194 ms** | 187–196 ms |
@@ -209,7 +209,7 @@ The first was dead work: every partial signature had both sides of its group equ
 
 The second was worse and older, and only showed up once the work was being *counted* rather than timed. A session's derived values (`Q`, `b`, `R`, `e`) were re-derived inside every per-signer call, and deriving them re-runs the whole key aggregation — one scalar multiplication per signer. So signing and verifying `u` partials cost `O(u²)`: **4u² + 22u + 5**, or 215 multiplications for five signers where 89 suffice. The session is now derived once and passed down; the public, spec-shaped `partialSigVerify` still derives its own context exactly as BIP-327 describes, for callers who have only the wire data.
 
-Together: a 5-signer session went from **117 ms to 34 ms** in the browser and **319 ms to 77 ms** with no DOM, and the whole 56-case vector suite from 215 ms to 182 ms. Nothing about what is computed changed — only how many times.
+Together: a 5-signer session went from **117 ms to 34 ms** in the browser and **319 ms to 77 ms** with no DOM, and the then-current suite of 55 official vectors plus one internal check from 215 ms to 182 ms. Those figures are historical; the current 70-vector suite has not been rebenchmarked on that M5. Nothing about what was computed changed — only how many times.
 
 None of this arithmetic is constant-time and **no timing property should be inferred from these numbers** — they describe interactive responsiveness, not side-channel resistance.
 

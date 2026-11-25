@@ -26,7 +26,7 @@ const GROUPS: [string, () => ReturnType<typeof runKeyAggVectors>][] = [
   ['signature aggregation', runSigAggVectors],
 ];
 
-describe('BIP-327 official test vectors', () => {
+describe('BIP-327 official test vectors and the lab consistency check', () => {
   for (const [name, run] of GROUPS) {
     describe(name, () => {
       const results = run();
@@ -59,6 +59,15 @@ describe('BIP-327 official test vectors', () => {
     expect(s.accept).toBeGreaterThan(0);
     expect(s.reject).toBeGreaterThan(0);
     expect(s.total).toBe(s.accept + s.reject);
+    expect(s.officialTotal).toBe(70);
+    expect(s.officialPassed).toBe(70);
+    expect(s.officialFailed).toBe(0);
+    expect(s.officialAccept).toBe(39);
+    expect(s.officialReject).toBe(31);
+    expect(s.internalTotal).toBe(1);
+    expect(s.internalPassed).toBe(1);
+    expect(s.internalFailed).toBe(0);
+    expect(s.total).toBe(71);
   });
 
   it('describes one group per spec vector file', () => {

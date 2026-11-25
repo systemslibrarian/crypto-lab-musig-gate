@@ -12,7 +12,7 @@ import { KAT_GROUPS, type KatResult, katSummary, runAllVectors } from '../musig/
 /**
  * Three cases pulled to the front.
  *
- * Fifty-odd green rows are evidence but not a lesson — nobody reads fifty rows, and
+ * Seventy green official rows are evidence but not a lesson — nobody reads seventy rows, and
  * the ones that matter most are invisible among the ones that are merely arithmetic.
  * These three are the cases that change how you would *write* an implementation:
  * one where rejecting is not enough because the report has to name a signer, one
@@ -34,7 +34,7 @@ interface Featured {
 const FEATURED: Featured[] = [
   {
     group: 'key_agg',
-    index: 4,
+    index: 5,
     title: 'A public key that is not a point on the curve',
     why: [
       'Rejecting is the easy half. BIP-327 requires the failure to be an ',
@@ -44,7 +44,7 @@ const FEATURED: Featured[] = [
   },
   {
     group: 'sig_agg',
-    index: 4,
+    index: 6,
     title: 'A partial signature at or above the group order',
     why: [
       'The tempting shortcut is to reduce the scalar mod n and carry on, because the arithmetic still works and the aggregate signature still verifies. BIP-327 says reject — and report signer 1, again by index. Accepting both ',
@@ -119,7 +119,7 @@ export function renderVectorsPanel(root: HTMLElement): void {
   output.append(
     verdict(
       summary.failed === 0 ? 'pass' : 'fail',
-      `${summary.passed} of ${summary.total} BIP-327 vectors pass — ${summary.accept} that must be accepted, ${summary.reject} that must be rejected`,
+      `${summary.officialPassed} of ${summary.officialTotal} official BIP-327 vectors pass; ${summary.internalPassed} of ${summary.internalTotal} internal consistency checks pass — ${summary.officialAccept} official cases that must be accepted, ${summary.officialReject} that must be rejected`,
       summary.failed === 0 ? 'All pass' : `${summary.failed} failing`,
     ),
   );
@@ -140,7 +140,7 @@ export function renderVectorsPanel(root: HTMLElement): void {
       h(
         'p',
         { class: 'help' },
-        `Every one of the ${summary.total} cases is in the tables below. These three are the ones that change how you would write an implementation — and two of them are places where the obvious behaviour is the wrong one.`,
+        `Every one of the ${summary.officialTotal} official cases, plus ${summary.internalTotal} internal consistency check, is in the tables below. These three are the ones that change how you would write an implementation — and two of them are places where the obvious behaviour is the wrong one.`,
       ),
       ...featuredCases(results).map(({ spec, result }) =>
         h(
@@ -199,7 +199,15 @@ export function renderVectorsPanel(root: HTMLElement): void {
                 'summary',
                 {},
                 passPill(r.pass),
-                h('span', { class: 'kat-kind' }, r.kind === 'accept' ? 'must accept' : 'must reject'),
+                h(
+                  'span',
+                  { class: 'kat-kind' },
+                  r.source === 'internal'
+                    ? 'internal check'
+                    : r.kind === 'accept'
+                      ? 'must accept'
+                      : 'must reject',
+                ),
                 h('span', { class: 'kat-case' }, r.what),
               ),
               h('div', { class: 'kat-body' }, ...katFields(r)),

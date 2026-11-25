@@ -404,7 +404,7 @@ export async function auditContrast(page: Page, within = 'body *'): Promise<Cont
      * Style and geometry are memoised per element for one pass.
      *
      * A driven pass here walks five exhibits, and the expensive states are
-     * genuinely large: the BIP-327 vectors panel renders 56 `<details>` cases in
+     * genuinely large: the BIP-327 vectors panel renders 70 official `<details>` cases plus one internal check in
      * seven groups, and the curve plot is 126 `<circle>` siblings inside one
      * `<g>`. Both are hundreds of elements re-walking the same ancestors up to
      * `<body>`. Without the caches the pass re-reads the same computed styles
@@ -527,7 +527,7 @@ export async function auditContrast(page: Page, within = 'body *'): Promise<Cont
       // that subtree — so the `display`/rect tests above all pass for text that
       // paints nothing. `checkVisibility()` catches it. This lab is full of
       // them: `.disclose`, `.learner-check`, `.glossary`, `#tour-advanced` and
-      // the 56 `.kat-item` vector cases all ship shut. The gate opens each by
+      // the 71 `.kat-item` vector checks all ship shut. The gate opens each by
       // clicking its <summary>, which is the route a reader has, rather than
       // setting `.open` from script — which is what the gate this replaces did
       // to every `<details>` on the page at once, before its single scan.

@@ -45,6 +45,8 @@ export interface KatResult {
   what: string;
   /** "accept" for valid vectors, "reject" for the spec's error/failure vectors. */
   kind: 'accept' | 'reject';
+  /** Omitted means an official BIP-327 case; only lab-authored checks set "internal". */
+  source?: 'official' | 'internal';
   pass: boolean;
   expected: string;
   actual: string;
@@ -308,6 +310,7 @@ export function runSignVerifyVectors(): KatResult[] {
     index: -1,
     what: 'the vector file’s stated pubkey/nonce/aggnonce relationships hold',
     kind: 'accept',
+    source: 'internal',
     pass:
       bytesToHex(individualPubkey(sk)) === bytesToHex(X[0]) &&
       bytesToHex(nonceAgg([pnonce[0], pnonce[1], pnonce[2]])) === bytesToHex(aggnonces[0]) &&
@@ -643,7 +646,7 @@ export function runSigAggVectors(): KatResult[] {
   return out;
 }
 
-/** Every BIP-327 vector this lab runs, in spec order. */
+/** All 70 official BIP-327 vectors plus one explicit internal consistency check. */
 export function runAllVectors(): KatResult[] {
   return [
     ...runKeyAggVectors(),
@@ -663,12 +666,30 @@ export function katSummary(results: KatResult[] = runAllVectors()): {
   failed: number;
   accept: number;
   reject: number;
+  officialTotal: number;
+  officialPassed: number;
+  officialFailed: number;
+  officialAccept: number;
+  officialReject: number;
+  internalTotal: number;
+  internalPassed: number;
+  internalFailed: number;
 } {
+  const official = results.filter((r) => r.source !== 'internal');
+  const internal = results.filter((r) => r.source === 'internal');
   return {
     total: results.length,
     passed: results.filter((r) => r.pass).length,
     failed: results.filter((r) => !r.pass).length,
     accept: results.filter((r) => r.kind === 'accept').length,
     reject: results.filter((r) => r.kind === 'reject').length,
+    officialTotal: official.length,
+    officialPassed: official.filter((r) => r.pass).length,
+    officialFailed: official.filter((r) => !r.pass).length,
+    officialAccept: official.filter((r) => r.kind === 'accept').length,
+    officialReject: official.filter((r) => r.kind === 'reject').length,
+    internalTotal: internal.length,
+    internalPassed: internal.filter((r) => r.pass).length,
+    internalFailed: internal.filter((r) => !r.pass).length,
   };
 }

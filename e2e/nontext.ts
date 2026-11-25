@@ -374,7 +374,7 @@ export async function auditNonText(page: Page, within = 'body *'): Promise<NonTe
      * Style and geometry are memoised per element for one pass.
      *
      * A driven pass here walks five exhibits, and the expensive states are
-     * genuinely large: the BIP-327 vectors panel renders 56 `<details>` cases
+     * genuinely large: the BIP-327 vectors panel renders 70 official `<details>` cases plus one internal check
      * in seven groups, and the curve plot is 126 `<circle>` siblings inside one
      * `<g>`. Without the caches the pass re-reads the same computed styles and
      * rects tens of thousands of times. Nothing mutates the DOM during the

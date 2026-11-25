@@ -429,8 +429,8 @@ test.describe('the BIP-327 vectors', () => {
     await page.locator('#tab-vectors').click();
     const panel = page.locator('#panel-vectors');
 
-    await expect(panel.locator('.verdict-pass').first()).toContainText('56 of 56');
-    await expect(panel.locator('.kat-item')).toHaveCount(56);
+    await expect(panel.locator('.verdict-pass').first()).toContainText('70 of 70 official');
+    await expect(panel.locator('.kat-item')).toHaveCount(71);
     await expect(panel.locator('.kat-bad')).toHaveCount(0);
     // One group per spec vector file, each reporting a full pass.
     await expect(panel.locator('.kat-group')).toHaveCount(7);
@@ -461,7 +461,7 @@ test.describe('the BIP-327 vectors', () => {
     await expect(featured).toContainText('invalid_contribution(signer=1, contrib=psig)');
     await expect(featured.locator('.kat-feature').nth(2)).toContainText('MUST ACCEPT');
     // It sits above the full catalogue rather than replacing it.
-    await expect(page.locator('#panel-vectors .kat-item')).toHaveCount(56);
+    await expect(page.locator('#panel-vectors .kat-item')).toHaveCount(71);
   });
 });
 

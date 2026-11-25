@@ -45,7 +45,7 @@ export const NARROW = { width: 380, height: 800 };
  *  2. IT ASSEMBLED A DOCUMENT NO VISITOR CAN REACH. Its last real act was
  *     `document.querySelectorAll('details').forEach(d => d.open = true)` and
  *     `document.querySelectorAll('[hidden]').forEach(el => el.removeAttribute('hidden'))`.
- *     That opened all 56 BIP-327 vector cases at once and, worse, unhid all
+ *     That opened all 70 official BIP-327 vector cases plus the internal check at once and, worse, unhid all
  *     five `<section class="panel">` tabpanels simultaneously — a page that
  *     cannot exist, because `selectTab()` hides four of them on every switch.
  *     Whatever axe then measured was a layout no reader will ever load. This
@@ -636,7 +636,7 @@ const btn = (page: Page, scope: string, label: string) =>
  *
  * Never `d.open = true`. The gate this replaces set `open` on every `<details>`
  * on the page from script, which both skipped the summary's own rendering and
- * produced a document with 56 vector cases expanded at once.
+ * produced a document with 70 official vector cases plus the internal check expanded at once.
  */
 async function openDetails(page: Page, selector: string): Promise<void> {
   const d = page.locator(selector).first();
@@ -942,9 +942,9 @@ export async function driveAllStates(page: Page, theme: string): Promise<void> {
   // ── Exhibit 5: the BIP-327 vectors ──────────────────────────────────────
   await page.locator('#tab-vectors').click();
   const vectors = '#panel-vectors';
-  await expect(page.locator(`${vectors} .kat-item`)).toHaveCount(56, { timeout: 60_000 });
-  await expect(page.locator(`${vectors} .verdict-pass`).first()).toContainText('56 of 56');
-  await scanAt('all 56 BIP-327 vectors run, in seven groups');
+  await expect(page.locator(`${vectors} .kat-item`)).toHaveCount(71, { timeout: 60_000 });
+  await expect(page.locator(`${vectors} .verdict-pass`).first()).toContainText('70 of 70 official');
+  await scanAt('all 70 official BIP-327 vectors and the internal check run, in seven groups');
 
   await openDetails(page, `${vectors} .kat-item`);
   await expect(page.locator(`${vectors} .kat-item`).first()).toContainText(
